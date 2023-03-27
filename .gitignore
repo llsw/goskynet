@@ -1,0 +1,6 @@
+bin/*
+log/*
+!.gitkeep
+.vscode
+**/*.dylib
+**/*.so
