@@ -1,5 +1,5 @@
 ## goskynet
-go 实现的skynet cluster，可以和lua版的skynet互相通信。集群底层网络linux使用的是netpoll，macosx和windows使用的是go标准的网络，详情可以看[network/skynet/cluster.go](network/skynet/cluster.go) listen方法。未来想实现[优雅的热重启](#优雅的热重启)。
+go 实现的skynet cluster，可以和lua版的skynet互相通信。集群底层网络linux使用的是netpoll，macosx和windows使用的是go标准的网络，详情可以看[network/skynet/cluster.go](network/skynet/cluster.go) listen方法。未来想实现[优雅的热重启](#优雅的热重启)。目前还不是稳定版，请慎用。
 ## 鸣谢
 * 云风大佬的[skynet](https://github.com/cloudwu/skynet.git)
 * 字节跳动的[netpool](https://github.com/cloudwego/hertz/tree/develop/pkg/network/netpoll)
