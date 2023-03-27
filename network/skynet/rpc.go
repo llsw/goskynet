@@ -48,9 +48,9 @@ func (rpc *Rpc) Dispatch(msg *[]byte, sz uint16) (session uint32, data *MsgPart,
 
 // session > 0: need response
 func (rpc *Rpc) RequestEncode(addr interface{}, session uint32, req []interface{}) (msgs []*MsgPart, err error) {
-	hlog.Debugf("RequestEncode0 %d %v\n", session, addr)
+	// hlog.Debugf("RequestEncode0 %d %v\n", session, addr)
 	msg, sz, err := Pack(req)
-	hlog.Debugf("RequestEncode1 %d %v\n", msg, sz)
+	// hlog.Debugf("RequestEncode1 %d %v\n", msg, sz)
 	if err != nil {
 		return
 	}

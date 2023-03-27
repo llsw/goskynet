@@ -8,6 +8,18 @@ import (
 	skynet "github.com/llsw/goskynet/network/skynet"
 )
 
+func main() {
+	cluster1()
+	c, err := cluster2()
+	if err != nil {
+		return
+	}
+	// 延迟一下
+	delayFunc(3, func() {
+		callTest(c)
+	})
+}
+
 func delayFunc(sec int64, action func()) {
 	timer := time.NewTimer(time.Duration(sec) * time.Second)
 	select {
@@ -45,44 +57,44 @@ func onData(addr interface{}, session uint32,
 	return
 }
 
-func main() {
+func cluster1() {
+	// call的cluster，可以改成lua skynet的cluster进行测试
+	clusterName := "ikun"
+	lisentAddr := "0.0.0.0:1989"
+	_, err := skynet.NewCluster(
+		clusterName, lisentAddr,
+		onDataIkun)
+	if err != nil {
+		hlog.Errorf("%s err:%s\n", clusterName, err.Error())
+	}
+}
 
+func cluster2() (c *skynet.Cluster, err error) {
 	clusterName := "goskynet"
 	lisentAddr := "0.0.0.0:1988"
-	c, err := skynet.NewCluster(
+	c, err = skynet.NewCluster(
 		clusterName, lisentAddr,
 		onData)
 	if err != nil {
 		hlog.Errorf("%s err:%s\n", clusterName, err.Error())
 		return
 	}
+	return
+}
 
-	// call的cluster，可以改成lua skynet的cluster进行测试
-	clusterName = "ikun"
-	lisentAddr = "0.0.0.0:1989"
-	_, err = skynet.NewCluster(
-		clusterName, lisentAddr,
-		onDataIkun)
+func callTest(c *skynet.Cluster) {
+	clusterAddr := "127.0.0.1:1989"
+	serviceAddr := "ikun"
+	cmd := "hello"
+	resp, err := c.Call(clusterAddr, serviceAddr, cmd, "hello ikun")
 	if err != nil {
-		hlog.Errorf("%s err:%s\n", clusterName, err.Error())
+		hlog.Errorf("call ikun cluster err:%s\n", err.Error())
 		return
 	}
 
-	// 延迟一下
-	delayFunc(3, func() {
-		clusterAddr := "127.0.0.1:1989"
-		serviceAddr := "ikun"
-		cmd := "hello"
-		resp, err := c.Call(clusterAddr, serviceAddr, cmd, "hello ikun")
-		if err != nil {
-			hlog.Errorf("call ikun cluster err:%s\n", err.Error())
-			return
-		}
+	hlog.Debugf("call ikun cluster resp:%v\n", resp)
 
-		hlog.Debugf("call ikun cluster resp:%v\n", resp)
-
-		for i, v := range resp {
-			hlog.Debugf("resp: %d %v\n", i, reflect.TypeOf(v))
-		}
-	})
+	for i, v := range resp {
+		hlog.Debugf("resp: %d %v\n", i, reflect.TypeOf(v))
+	}
 }
