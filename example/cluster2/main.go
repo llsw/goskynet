@@ -19,7 +19,7 @@ func main() {
 			config, err.Error(),
 		)
 	}
-	delayFunc(3, callIkun)
+	go delayFunc(3, callIkun)
 	hlog.Fatal(c.ListenAndServe())
 }
 
