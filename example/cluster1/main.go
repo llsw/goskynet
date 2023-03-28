@@ -16,7 +16,7 @@ func main() {
 
 	service.NewIkunService()
 
-	err := cluster.Open(config)
+	c, err := cluster.Open(config)
 	if err != nil {
 		hlog.Errorf(
 			"start cluster fail, config:%s error:%s",
@@ -24,7 +24,7 @@ func main() {
 		)
 		return
 	}
-
+	c.ListenAndServe()
 }
 
 func delayFunc(sec int64, action func()) {

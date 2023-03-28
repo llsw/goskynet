@@ -20,16 +20,16 @@ type (
 
 // ===必须实现===
 func (c *Cluster) Init(name string, pid *actor.PID) (err error) {
-	return
-}
-
-func (c *Cluster) Start(name string, pid *actor.PID) {
 	worker, err := skynet.NewCluster(c.name, c.addr, c.onData)
 	if err != nil {
 		hlog.Errorf("start cluster:%s error:%s", name, err.Error())
 		return
 	}
 	c.worker = worker
+	return
+}
+
+func (c *Cluster) Start(name string, pid *actor.PID) {
 }
 
 func (c *Cluster) Stop(name string, pid *actor.PID) (err error) {
@@ -91,7 +91,7 @@ func Send(cluster string, addr string, req ...interface{}) (err error) {
 
 // ===自定义消息处理方法===
 
-func Open(clusterConfigPath string) (err error) {
+func Open(clusterConfigPath string) (c *skynet.Cluster, err error) {
 	err = config.LoadClusterConfig(clusterConfigPath)
 	if err != nil {
 		hlog.Errorf("load cluster config error:%s", err.Error())
@@ -125,5 +125,6 @@ func Open(clusterConfigPath string) (err error) {
 		hlog.Errorf("NewService cluster error:%s", err.Error())
 		return
 	}
+	c = master.worker
 	return
 }

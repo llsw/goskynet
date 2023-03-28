@@ -2,7 +2,6 @@ package main
 
 import (
 	"flag"
-	"sync"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
@@ -10,34 +9,27 @@ import (
 )
 
 func main() {
-	var wg sync.WaitGroup
-	wg.Add(1)
-	go func() {
-		var config string
-		flag.StringVar(&config, "c", "./config.yaml", "配置文件路径，默认./config.yaml")
-		flag.Parse()
-		err := cluster.Open(config)
-		if err != nil {
-			hlog.Errorf(
-				"start cluster fail, config:%s error:%s",
-				config, err.Error(),
-			)
-		}
-		wg.Done()
-	}()
+	var config string
+	flag.StringVar(&config, "c", "./config.yaml", "配置文件路径，默认./config.yaml")
+	flag.Parse()
+	c, err := cluster.Open(config)
+	if err != nil {
+		hlog.Errorf(
+			"start cluster fail, config:%s error:%s",
+			config, err.Error(),
+		)
+	}
+	delayFunc(3, callIkun)
+	hlog.Fatal(c.ListenAndServe())
+}
 
-	delayFunc(3, func() {
-		hlog.Error("call cluster1")
-		resp, err := cluster.Call("cluster1", "ikun", "Ikun", "hello", "ikun")
-		if err != nil {
-			hlog.Errorf("call cluster1 fail error:%s", err)
-			return
-		}
-		hlog.Infof("call cluster1 resp:%v", resp)
-	})
-
-	wg.Wait()
-
+func callIkun() {
+	resp, err := cluster.Call("cluster1", "ikun", "Ikun", "hello", "ikun")
+	if err != nil {
+		hlog.Errorf("call cluster1 fail error:%s", err)
+		return
+	}
+	hlog.Infof("call cluster1 resp:%v", resp)
 }
 
 func delayFunc(sec int64, action func()) {

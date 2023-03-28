@@ -5,7 +5,6 @@ import (
 	"encoding/binary"
 	"net"
 	"runtime"
-	"sync"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/config"
@@ -208,7 +207,7 @@ func (c *Cluster) newOpts() *config.Options {
 	return genOpts(server.WithHostPorts(c.addr))
 }
 
-func (c *Cluster) listen() (err error) {
+func (c *Cluster) ListenAndServe() (err error) {
 	// addr代表不监听请求，只处理发送, 可以多开几个cluster发送请求
 	if c.addr == "" {
 		return
@@ -226,8 +225,8 @@ func (c *Cluster) listen() (err error) {
 	return
 }
 
-func (c *Cluster) open() (err error) {
-	return c.listen()
+func (c *Cluster) Open() (err error) {
+	return c.ListenAndServe()
 }
 
 func (c *Cluster) getChannel(node string) (channel *Channel, err error) {
@@ -282,8 +281,7 @@ func (c *Cluster) GetAddr() string {
 }
 
 func NewCluster(name string, addr string, handler ClusterMsgHandler) (c *Cluster, err error) {
-	var wg sync.WaitGroup
-	wg.Add(1)
+
 	if handler == nil {
 		handler = defalutHandler
 	}
@@ -294,13 +292,8 @@ func NewCluster(name string, addr string, handler ClusterMsgHandler) (c *Cluster
 		conns:    make(map[network.Conn]*ClusterConn),
 		handler:  handler,
 	}
-	go func() {
-		err = c.open()
-		if err != nil {
-			hlog.Errorf("NewCluster fail err:%s\n", err.Error())
-		}
-		wg.Done()
-	}()
-	wg.Wait()
+	if err != nil {
+		hlog.Errorf("NewCluster fail err:%s\n", err.Error())
+	}
 	return
 }
