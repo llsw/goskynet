@@ -134,7 +134,7 @@ func Register(pid string, receiver interface{}) error {
 	return nil
 }
 
-func (s *Service) NewService(name string, service AcotrService) (pid *actor.PID, err error) {
+func (s *Service) newService(name string, service AcotrService) (pid *actor.PID, err error) {
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
@@ -174,7 +174,14 @@ func (s *Service) NewService(name string, service AcotrService) (pid *actor.PID,
 		)
 	}
 	return
+}
 
+func (s *Service) NewService(name string, service AcotrService) (pid *actor.PID, err error) {
+	if name == "cluster" {
+		err = fmt.Errorf("can not use cluster by service name")
+		return
+	}
+	return s.newService(name, service)
 }
 
 func (s *Service) Call(pidOrName interface{}, cmd string, args ...interface{}) (interface{}, error) {
@@ -211,7 +218,11 @@ func (s *Service) Call(pidOrName interface{}, cmd string, args ...interface{}) (
 	return nil, fmt.Errorf("call pidOrName type:%v invalid", pidOrName)
 }
 
-func (s *Service) Send(pidOrName interface{}, message interface{}) (err error) {
+func (s *Service) Send(pidOrName interface{}, cmd string, args ...interface{}) (err error) {
+	message := &Msg{
+		Cmd:  cmd,
+		Args: args,
+	}
 	ctx := s.system.Root
 	switch v := pidOrName.(type) {
 	case string:

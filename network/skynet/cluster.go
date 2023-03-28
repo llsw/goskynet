@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"net"
 	"runtime"
+	"sync"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/config"
@@ -208,6 +209,10 @@ func (c *Cluster) newOpts() *config.Options {
 }
 
 func (c *Cluster) listen() (err error) {
+	// addr代表不监听请求，只处理发送, 可以多开几个cluster发送请求
+	if c.addr == "" {
+		return
+	}
 	opts := c.newOpts()
 	switch runtime.GOOS {
 	case "linux":
@@ -277,6 +282,8 @@ func (c *Cluster) GetAddr() string {
 }
 
 func NewCluster(name string, addr string, handler ClusterMsgHandler) (c *Cluster, err error) {
+	var wg sync.WaitGroup
+	wg.Add(1)
 	if handler == nil {
 		handler = defalutHandler
 	}
@@ -291,8 +298,9 @@ func NewCluster(name string, addr string, handler ClusterMsgHandler) (c *Cluster
 		err = c.open()
 		if err != nil {
 			hlog.Errorf("NewCluster fail err:%s\n", err.Error())
-			return
 		}
+		wg.Done()
 	}()
+	wg.Wait()
 	return
 }
