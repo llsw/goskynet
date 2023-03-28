@@ -172,6 +172,11 @@ func (s *Service) newService(name string, service AcotrService) (pid *actor.PID,
 			"service start error name:%d error:%s",
 			name, err.Error(),
 		)
+	} else {
+		hlog.Infof(
+			"service start ok name:%d pid:%s",
+			name, pid.Id,
+		)
 	}
 	return
 }

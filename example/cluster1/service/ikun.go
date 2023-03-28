@@ -36,6 +36,6 @@ func (i *Ikun) Ikun(args1 string, args2 string) (string, string, string) {
 
 func NewIkunService() (*actor.PID, error) {
 	ins := skynet.GetInstance()
-	ikun := Ikun{}
-	return ins.NewService("ikun", &ikun)
+	ikun := &Ikun{}
+	return ins.NewService("ikun", ikun)
 }

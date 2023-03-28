@@ -28,11 +28,15 @@ ifeq ($(OS),Windows_NT)
 
 else ifeq ($(shell uname),Darwin)
 	# ${HELLO_BINARY}
-	${CLUSTER1_BINARY} -c ${CLUSTER1_SRC}/config.yaml
+	-@killall cluster1 || true
+	-@killall cluster2 || true
+	${CLUSTER1_BINARY} -c ${CLUSTER1_SRC}/config.yaml &
 	${CLUSTER2_BINARY} -c ${CLUSTER2_SRC}/config.yaml
 else
 	# ${HELLO_BINARY}
-	${CLUSTER1_BINARY} -c ${CLUSTER1_SRC}/config.yaml
+	-@killall cluster1 || true
+	-@killall cluster2 || true
+	${CLUSTER1_BINARY} -c ${CLUSTER1_SRC}/config.yaml &
 	${CLUSTER2_BINARY} -c ${CLUSTER2_SRC}/config.yaml
 endif
 

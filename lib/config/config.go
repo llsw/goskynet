@@ -204,12 +204,12 @@ func (c *ConfigReader) compareConfigs(oldConfig *Config, newConfig *Config) {
 
 func syncConfig(configReader *ConfigReader) {
 	for {
-		config, err := configReader.getConfig()
+		_, err := configReader.getConfig()
 		if err != nil {
 			hlog.Errorf("failed to read config: %v\n", err)
 			continue
 		}
-		hlog.Errorf("config: %v\n", config)
+		// hlog.Errorf("config: %v\n", config)
 		time.Sleep(time.Second * 60)
 	}
 }
@@ -261,6 +261,7 @@ func GetInstanceStruct(path string) (config *ConfigStruct, err error) {
 		} else {
 			configReader := NewConfigReaderStruct(path)
 			config, err = configReader.getConfigStruct()
+			hlog.Debugf("config:%v", config)
 			if err != nil {
 				return
 			}
@@ -288,6 +289,7 @@ func GetInstance() (config *ClusterConfig) {
 			config = clusterConfig
 		} else {
 			config = &ClusterConfig{}
+			clusterConfig = config
 		}
 	}
 	return

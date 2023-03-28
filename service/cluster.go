@@ -6,6 +6,7 @@ import (
 	"github.com/asynkron/protoactor-go/actor"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	config "github.com/llsw/goskynet/lib/config"
+	"github.com/llsw/goskynet/lib/utils"
 	skynet "github.com/llsw/goskynet/network/skynet"
 )
 
@@ -19,15 +20,24 @@ type (
 
 // ===必须实现===
 func (c *Cluster) Init(name string, pid *actor.PID) (err error) {
+	return
+}
+
+func (c *Cluster) Start(name string, pid *actor.PID) {
 	worker, err := skynet.NewCluster(c.name, c.addr, c.onData)
 	if err != nil {
+		hlog.Errorf("start cluster:%s error:%s", name, err.Error())
 		return
 	}
 	c.worker = worker
+}
+
+func (c *Cluster) Stop(name string, pid *actor.PID) (err error) {
 	return
 }
 
 func (c *Cluster) onData(addr interface{}, session uint32, args ...interface{}) (resp []interface{}, err error) {
+	hlog.Debugf("onData addr:%v session:%d, args:%v", addr, session, args)
 	switch v := addr.(type) {
 	case string:
 		ins := GetInstance()
@@ -50,32 +60,33 @@ func (c *Cluster) onData(addr interface{}, session uint32, args ...interface{}) 
 	return
 }
 
-func (c *Cluster) Start(name string, pid *actor.PID) {
-}
-
-func (c *Cluster) Stop(name string, pid *actor.PID) (err error) {
-	return
-}
-
 // ===必须实现===
 
 // ===自定义消息处理方法===
 
 func (c *Cluster) Call(cluster string, addr string, req ...interface{}) (resp interface{}, err error) {
-	return c.worker.Call(cluster, addr, req...)
+	node, err := utils.GetClusterAddrByName(cluster)
+	if err != nil {
+		return
+	}
+	return c.worker.Call(node, addr, req...)
 
 }
 
 func (c *Cluster) Send(cluster string, addr string, req ...interface{}) (err error) {
-	return c.worker.Send(cluster, addr, req...)
+	node, err := utils.GetClusterAddrByName(cluster)
+	if err != nil {
+		return
+	}
+	return c.worker.Send(node, addr, req...)
 }
 
 func Call(cluster string, addr string, req ...interface{}) (resp interface{}, err error) {
-	return GetInstance().Call("cluster", "Call", addr, req)
+	return GetInstance().Call("cluster", "Call", cluster, addr, req)
 }
 
 func Send(cluster string, addr string, req ...interface{}) (err error) {
-	return GetInstance().Send("cluster", "Call", addr, req)
+	return GetInstance().Send("cluster", "Call", cluster, addr, req)
 }
 
 // ===自定义消息处理方法===
@@ -94,25 +105,25 @@ func Open(clusterConfigPath string) (err error) {
 		hlog.Errorf("cluster addrr not found by name:%s", name)
 		return
 	}
-
 	ins := GetInstance()
-	cluster := Cluster{}
-	cluster.name = name
-	cluster.addr = adrr
-	_, err = ins.newService("cluster", &cluster)
-	if err != nil {
-		hlog.Errorf("NewService cluster error:%s", err.Error())
-		return
-	}
 	for i := 0; i < workers; i++ {
-		cluster := Cluster{}
-		cluster.name = name
-		cluster.addr = "" // 空地址表示不监听
-		_, err = ins.newService("cluster", &cluster)
+		worker := Cluster{}
+		worker.name = name
+		worker.addr = "" // 空地址表示不监听
+		_, err = ins.newService("cluster", &worker)
 		if err != nil {
 			hlog.Errorf("NewService cluster error:%s", err.Error())
 			return
 		}
+	}
+
+	master := Cluster{}
+	master.name = name
+	master.addr = adrr
+	_, err = ins.newService("cluster", &master)
+	if err != nil {
+		hlog.Errorf("NewService cluster error:%s", err.Error())
+		return
 	}
 	return
 }
