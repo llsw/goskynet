@@ -18,17 +18,35 @@ type Method struct {
 }
 
 func (m *Method) call(req ...interface{}) (resp []interface{}, err error) {
+	defer func() {
+		if e := recover(); e != nil {
+			switch v := e.(type) {
+			case error:
+				err = v
+			case string:
+				err = fmt.Errorf("%s", v)
+
+			}
+			hlog.Errorf("call error:%s", err.Error())
+		}
+	}()
+	// panic("test panic")
+	actually := len(req)
 	num := m.method.Type.NumIn()
-	in := make([]reflect.Value, num)
+	in := make([]reflect.Value, actually+1)
 	in[0] = m.rcvr
-	if len(req) != num-1 {
-		err = fmt.Errorf("call method:%s error: args number need:%d actually:%d", m.method.Name, num, len(req))
+
+	if actually < num-1 {
+		err = fmt.Errorf(
+			"call method:%s error: args number need:%d actually:%d %v",
+			m.method.Name, num-1, len(req), req,
+		)
 		return
 	}
-	for i := 1; i < num; i++ {
+
+	for i := 1; i < actually+1; i++ {
 		in[i] = reflect.ValueOf(req[i-1])
 	}
-
 	temp := m.method.Func.Call(in)
 	l := len(temp)
 	resp = make([]interface{}, l)
@@ -198,7 +216,7 @@ func (s *Service) Call(pidOrName interface{}, cmd string, args ...interface{}) (
 	switch v := pidOrName.(type) {
 	case string:
 		if ag, ok := s.actors[v]; ok {
-			ag.Balance = (ag.Balance + 1) % len(s.actors)
+			ag.Balance = (ag.Balance + 1) % len(ag.Actors)
 			act := ag.Actors[ag.Balance]
 			if act == nil {
 				return nil, fmt.Errorf("call service:%s not found", pidOrName)

@@ -4,8 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"sync"
-
-	"github.com/cloudwego/hertz/pkg/common/hlog"
 )
 
 var (
@@ -58,7 +56,7 @@ func (rpc *Rpc) RequestEncode(addr interface{}, session uint32, req []interface{
 	_, msgs, err = PackRequest(
 		addr, session, msg, uint32(sz),
 	)
-	hlog.Debugf("RequestEncode2 %v\n", msgs)
+	// hlog.Debugf("RequestEncode2 %v\n", msgs)
 	if err != nil {
 		return
 	}

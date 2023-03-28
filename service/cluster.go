@@ -70,7 +70,6 @@ func (c *Cluster) Call(cluster string, addr string, req ...interface{}) (resp in
 		return
 	}
 	return c.worker.Call(node, addr, req...)
-
 }
 
 func (c *Cluster) Send(cluster string, addr string, req ...interface{}) (err error) {
@@ -81,12 +80,12 @@ func (c *Cluster) Send(cluster string, addr string, req ...interface{}) (err err
 	return c.worker.Send(node, addr, req...)
 }
 
-func Call(cluster string, addr string, req ...interface{}) (resp interface{}, err error) {
-	return GetInstance().Call("cluster", "Call", cluster, addr, req)
+func Call(req ...interface{}) (resp interface{}, err error) {
+	return GetInstance().Call("cluster", "Call", req...)
 }
 
-func Send(cluster string, addr string, req ...interface{}) (err error) {
-	return GetInstance().Send("cluster", "Call", cluster, addr, req)
+func Send(req ...interface{}) (err error) {
+	return GetInstance().Send("cluster", "Call", req...)
 }
 
 // ===自定义消息处理方法===

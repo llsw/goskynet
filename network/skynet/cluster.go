@@ -106,21 +106,25 @@ func (c *Cluster) msg(ctx context.Context, conn network.Conn, addr interface{}, 
 	if err != nil {
 		return
 	}
-	// jarg, err := json.MarshalIndent(args, "", "\t")
-	// if err != nil {
-	// 	return
-	// }
-	// // hlog.Debugf("cluster receive msg:%v\n", args)
+	ok := true
+	var msgsz int
 	resps, err := c.handler(addr, session, args...)
 	if err != nil {
-		return
+		ok = false
+		errmsg := []byte(err.Error())
+		msg = &errmsg
+		msgsz = len(errmsg)
+	} else {
+		msg, msgsz, err = Pack(resps)
+		if err != nil {
+			ok = false
+			errmsg := []byte(err.Error())
+			msg = &errmsg
+			msgsz = len(errmsg)
+		}
 	}
-	var msgsz int
-	msg, msgsz, err = Pack(resps)
-	if err != nil {
-		return
-	}
-	msgs, err := PackResponse(session, true, msg, uint32(msgsz))
+
+	msgs, err := PackResponse(session, ok, msg, uint32(msgsz))
 
 	if err != nil {
 		return
@@ -260,6 +264,7 @@ func (c *Cluster) Call(node string, addr interface{}, req ...interface{}) (resp 
 	if err != nil {
 		return
 	}
+	hlog.Debugf("addr:%v req:%v", addr, req)
 	return channel.Call(addr, req...)
 }
 
