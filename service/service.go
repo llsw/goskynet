@@ -69,11 +69,6 @@ type ActorGroup struct {
 	Balance int
 }
 
-type NewResult struct {
-	Pid *actor.PID
-	Err error
-}
-
 type Service struct {
 	actors map[string]*ActorGroup
 	names  map[*actor.PID]string
@@ -139,22 +134,16 @@ func Register(pid string, receiver interface{}) error {
 	return nil
 }
 
-func (s *Service) NewService(name string, service AcotrService) (*actor.PID, error) {
-	newDone := make(chan *NewResult)
+func (s *Service) NewService(name string, service AcotrService) (pid *actor.PID, err error) {
+	var wg sync.WaitGroup
+	wg.Add(1)
 	go func() {
-		var err error
 		act := &Acotr{}
-		done := &NewResult{}
 		props := actor.PropsFromProducer(func() actor.Actor { return act })
-		pid := s.system.Root.Spawn(props)
+		pid = s.system.Root.Spawn(props)
 		err = service.Init(name, pid)
 		if err != nil {
-			hlog.Errorf(
-				"service start error name:%d error:%s",
-				name, err.Error(),
-			)
-			done.Err = err
-			newDone <- done
+			wg.Done()
 			return
 		}
 		s.names[pid] = name
@@ -169,26 +158,22 @@ func (s *Service) NewService(name string, service AcotrService) (*actor.PID, err
 			s.actors[name].Actors = append(s.actors[name].Actors, pid)
 		}
 		// 注册回调
-		Register(pid.Id, service)
+		err = Register(pid.Id, service)
+		if err != nil {
+			wg.Done()
+			return
+		}
 		go service.Start(name, pid)
-		hlog.Infof(
-			"service start name:%s pid:%s all:%d",
-			name, pid.Id, len(s.actors[name].Actors),
-		)
-		// if err != nil {
-		// 	hlog.Errorf(
-		// 		"service run error name:%d error:%s",
-		// 		name, err.Error(),
-		// 	)
-		// 	return
-		// }
-
-		done.Pid = pid
-		newDone <- done
+		wg.Done()
 	}()
-	done := <-newDone
-	close(newDone)
-	return done.Pid, done.Err
+	wg.Wait()
+	if err != nil {
+		hlog.Errorf(
+			"service start error name:%d error:%s",
+			name, err.Error(),
+		)
+	}
+	return
 
 }
 
