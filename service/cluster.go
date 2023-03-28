@@ -5,6 +5,7 @@ import (
 
 	"github.com/asynkron/protoactor-go/actor"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+	config "github.com/llsw/goskynet/lib/config"
 	utils "github.com/llsw/goskynet/lib/utils"
 	skynet "github.com/llsw/goskynet/network/skynet"
 )
@@ -80,7 +81,15 @@ func Send(cluster string, addr string, req ...interface{}) (err error) {
 
 // ===自定义消息处理方法===
 
-func Start(name string, workers int) (errr error) {
+func Start(clusterConfigPath string) (err error) {
+	err = config.LoadClusterConfig(clusterConfigPath)
+	if err != nil {
+		hlog.Errorf("load cluster config error:%s", err.Error())
+		return
+	}
+	cc := config.GetInstance().Config
+	name := cc.Name
+	workers := cc.Workers
 	adrr, err := utils.GetClusterAddrByName(name)
 	if err != nil {
 		hlog.Errorf("cluster addrr not found by name:%s", name)
