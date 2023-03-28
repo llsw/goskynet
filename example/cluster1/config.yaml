@@ -1,5 +1,6 @@
 name: cluster1
 address: 0.0.0.0:1988
+workers: 4
 clustername: "./example/clustername.yaml"
 log:
   path: "./log/clcuster1"
