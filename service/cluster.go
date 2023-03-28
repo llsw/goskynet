@@ -43,6 +43,10 @@ func (c *Cluster) onData(addr interface{}, session uint32, args ...interface{}) 
 		ins := GetInstance()
 		var res interface{}
 		res, err = ins.Call(v, args[0].(string), args[1:]...)
+		switch v := res.(type) {
+		case error:
+			err = v
+		}
 		if err != nil {
 			break
 		}
@@ -55,7 +59,7 @@ func (c *Cluster) onData(addr interface{}, session uint32, args ...interface{}) 
 		resp = nil
 	}
 	if err != nil {
-		hlog.Errorf("call addr:%v error:%s", err.Error())
+		hlog.Errorf("call addr:%v error:%s", addr, err.Error())
 	}
 	return
 }
