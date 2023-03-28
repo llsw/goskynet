@@ -1,0 +1,6 @@
+name: cluster2
+address: 0.0.0.0:1989
+clustername: "./example/clustername.yaml"
+log:
+  path: "./log/clcuster2"
+  interval: 86400

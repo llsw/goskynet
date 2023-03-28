@@ -4,9 +4,13 @@ include platform.mk
 WORKDIR=$(shell pwd)
 HELLO_SRC=${WORKDIR}/example/service
 HELLO_BINARY=${WORKDIR}/bin/$(PLAT)/service
-CLUSTER_SRC=${WORKDIR}/example/cluster
-CLUSTER_BINARY=${WORKDIR}/bin/$(PLAT)/cluster
-all: clean hello cluster test
+
+CLUSTER1_SRC=${WORKDIR}/example/cluster1
+CLUSTER1_BINARY=${WORKDIR}/bin/$(PLAT)/cluster1
+
+CLUSTER2_SRC=${WORKDIR}/example/cluster2
+CLUSTER2_BINARY=${WORKDIR}/bin/$(PLAT)/cluster2
+all: clean cluster test
 
 hello:
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} &&\
@@ -14,17 +18,22 @@ hello:
 
 cluster:
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} &&\
-	cd ${CLUSTER_SRC} && go build -o ${CLUSTER_BINARY}
+	cd ${CLUSTER1_SRC} && go build -o ${CLUSTER1_BINARY}
+
+	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} &&\
+	cd ${CLUSTER2_SRC} && go build -o ${CLUSTER2_BINARY}
 
 test:
 ifeq ($(OS),Windows_NT)
 
 else ifeq ($(shell uname),Darwin)
-	${HELLO_BINARY}
-	${CLUSTER_BINARY}
+	# ${HELLO_BINARY}
+	${CLUSTER1_BINARY} -c ${CLUSTER1_SRC}/config.yaml
+	${CLUSTER2_BINARY} -c ${CLUSTER2_SRC}/config.yaml
 else
-	${HELLO_BINARY}
-	${CLUSTER_BINARY}
+	# ${HELLO_BINARY}
+	${CLUSTER1_BINARY} -c ${CLUSTER1_SRC}/config.yaml
+	${CLUSTER2_BINARY} -c ${CLUSTER2_SRC}/config.yaml
 endif
 
 gotool:

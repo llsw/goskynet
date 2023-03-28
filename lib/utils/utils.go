@@ -8,8 +8,8 @@ import (
 
 func GetClusterAddrByName(name string) (addr string, err error) {
 	config := config.GetInstance()
-	if v, ok := config.Config.Clustername[name]; ok {
-		addr = v
+	if v, ok := (*config.Clustername)[name]; ok {
+		addr = v.(string)
 		return
 	}
 	err = fmt.Errorf("cluster:%s addr not found", name)

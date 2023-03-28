@@ -22,10 +22,11 @@ type LogConfig struct {
 
 type ConfigStruct struct {
 	// 定义你的配置项
-	Name        string            `yaml:"name"`
-	Workers     int               `yaml:"workers"`
-	Log         *LogConfig        `yaml:"log"`
-	Clustername map[string]string `yaml:"clustername"`
+	Name        string     `yaml:"name"`
+	Address     string     `yaml:"address"`
+	Workers     int        `yaml:"workers"`
+	Log         *LogConfig `yaml:"log"`
+	Clustername string     `yaml:"clustername"`
 }
 
 type Config map[string]interface{}
@@ -270,8 +271,9 @@ func GetInstanceStruct(path string) (config *ConfigStruct, err error) {
 }
 
 type ClusterConfig struct {
-	Path   string
-	Config *ConfigStruct
+	Path        string
+	Config      *ConfigStruct
+	Clustername *Config
 }
 
 var clusterConfig *ClusterConfig
@@ -295,5 +297,9 @@ func LoadClusterConfig(path string) (err error) {
 	ins := GetInstance()
 	ins.Path = path
 	ins.Config, err = GetInstanceStruct(path)
+	if err != nil {
+		return err
+	}
+	ins.Clustername, err = GetInstanceMap(ins.Config.Clustername)
 	return
 }
