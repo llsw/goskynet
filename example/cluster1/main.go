@@ -1,36 +1,32 @@
 package main
 
 import (
-	"flag"
-	"time"
-
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	service "github.com/llsw/goskynet/example/cluster1/service"
+	utils "github.com/llsw/goskynet/lib/utils"
 	cluster "github.com/llsw/goskynet/service"
 )
 
 func main() {
-	var config string
-	flag.StringVar(&config, "c", "./config.yaml", "配置文件路径，默认./config.yaml")
-	flag.Parse()
+	cf, err := utils.PareClusterFlag("v0.1.2")
+	if err != nil {
+		hlog.Fatalf(err.Error())
+		return
+	}
 
 	service.NewIkunService()
 
-	c, err := cluster.Open(config)
+	c, close, err := cluster.Open(cf.ConfigPath)
+	defer func() {
+		close()
+	}()
+
 	if err != nil {
 		hlog.Errorf(
 			"start cluster fail, config:%s error:%s",
-			config, err.Error(),
+			cf.ConfigPath, err.Error(),
 		)
 		return
 	}
 	c.ListenAndServe()
-}
-
-func delayFunc(sec int64, action func()) {
-	timer := time.NewTimer(time.Duration(sec) * time.Second)
-	select {
-	case <-timer.C:
-		action()
-	}
 }

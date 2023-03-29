@@ -7,6 +7,8 @@ require (
 	github.com/cloudwego/hertz v0.6.0
 )
 
+require github.com/kr/pretty v0.3.1 // indirect
+
 require (
 	github.com/Workiva/go-datastructures v1.0.53 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect

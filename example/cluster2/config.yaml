@@ -1,7 +1,10 @@
 name: cluster2
 address: 0.0.0.0:1989
+version: "0.1.2"
 workers: 4
 clustername: "./example/clustername.yaml"
 log:
-  path: "./log/clcuster2"
+  # 不指定路径就会输出到控制台
+  # path: "./log/cluster2"
+  level: 1
   interval: 86400

@@ -16,14 +16,16 @@ import (
 var lock = &sync.Mutex{}
 
 type LogConfig struct {
-	Path     string `yaml:"path"`
-	Interval int    `yaml:"interval"`
+	Path     string     `yaml:"path"`
+	Level    hlog.Level `yaml:"level"`
+	Interval int64      `yaml:"interval"`
 }
 
 type ConfigStruct struct {
 	// 定义你的配置项
 	Name        string     `yaml:"name"`
 	Address     string     `yaml:"address"`
+	Version     string     `yaml:"Version"`
 	Workers     int        `yaml:"workers"`
 	Log         *LogConfig `yaml:"log"`
 	Clustername string     `yaml:"clustername"`

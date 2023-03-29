@@ -27,7 +27,7 @@ func (m *Method) call(req ...interface{}) (resp []interface{}, err error) {
 				err = fmt.Errorf("%s", v)
 
 			}
-			hlog.Errorf("call error:%s", err.Error())
+			// hlog.Errorf("call error:%s", err.Error())
 		}
 	}()
 	// panic("test panic")
