@@ -119,7 +119,6 @@ func (c *ConfigReader) getConfig() (*Config, error) {
 		}
 
 		if oldConfig != nil {
-			// 比较新旧配置
 			c.compareConfigs(oldConfig, c.config)
 		}
 	}
@@ -160,26 +159,32 @@ func (c *ConfigReaderStruct) GetConfigStruct() *ConfigStruct {
 	return c.config
 }
 
-func (c *ConfigReaderStruct) compareConfigsStruct(oldConfig *ConfigStruct, newConfig *ConfigStruct) {
-	oldConfigValue := reflect.ValueOf(oldConfig).Elem()
-	newConfigValue := reflect.ValueOf(newConfig).Elem()
+func (c *ConfigReaderStruct) compareConfigsStruct(oldConfig *ConfigStruct,
+	newConfig *ConfigStruct) {
 
-	for i := 0; i < oldConfigValue.NumField(); i++ {
-		oldFieldValue := oldConfigValue.Field(i)
-		newFieldValue := newConfigValue.Field(i)
+	ov := reflect.ValueOf(oldConfig).Elem()
+	nv := reflect.ValueOf(newConfig).Elem()
 
-		if !reflect.DeepEqual(oldFieldValue.Interface(), newFieldValue.Interface()) {
-			hlog.Infof("Configuration item '%s' changed: old value '%v', new value '%v'\n",
-				oldConfigValue.Type().Field(i).Name, oldFieldValue.Interface(), newFieldValue.Interface())
+	for i := 0; i < ov.NumField(); i++ {
+		ofv := ov.Field(i)
+		nfv := nv.Field(i)
+
+		if !reflect.DeepEqual(ofv.Interface(), nfv.Interface()) {
+			hlog.Infof(
+				"configuration item '%s'"+
+					"changed: old value '%v', "+
+					"new value '%v'\n",
+				ov.Type().Field(i).Name,
+				ofv.Interface(),
+				nfv.Interface(),
+			)
 		}
 	}
 }
 
-func (c *ConfigReader) compareConfigs(oldConfig *Config, newConfig *Config) {
-	// Create a set to keep track of keys that are present in oldConfig but not in newConfig.
+func (c *ConfigReader) compareConfigs(oldConfig *Config,
+	newConfig *Config) {
 	missingKeys := make(map[string]bool)
-
-	// Compare values for keys that are present in both oldConfig and newConfig.
 	for key, oldValue := range *oldConfig {
 		newValue, ok := (*newConfig)[key]
 		if !ok {
@@ -187,20 +192,27 @@ func (c *ConfigReader) compareConfigs(oldConfig *Config, newConfig *Config) {
 			continue
 		}
 		if !reflect.DeepEqual(oldValue, newValue) {
-			fmt.Printf("Key %s: old value %v, new value %v\n", key, oldValue, newValue)
+			fmt.Printf(
+				"Key %s: old value %v, new value %v\n",
+				key, oldValue, newValue,
+			)
 		}
 	}
 
-	// Check for keys that are present in newConfig but not in oldConfig.
 	for key, _ := range *newConfig {
 		if _, ok := (*oldConfig)[key]; !ok {
-			fmt.Printf("Key %s is present in new config but not in old config\n", key)
+			fmt.Printf(
+				"Key %s is present in "+
+					"new config but not in old config\n", key,
+			)
 		}
 	}
 
-	// Print out the keys that were missing from newConfig.
 	for key, _ := range missingKeys {
-		fmt.Printf("Key %s is present in old config but not in new config\n", key)
+		fmt.Printf(
+			"Key %s is present in "+
+				"old config but not in new config\n", key,
+		)
 	}
 }
 
@@ -211,7 +223,6 @@ func syncConfig(configReader *ConfigReader) {
 			hlog.Errorf("failed to read config: %v\n", err)
 			continue
 		}
-		// hlog.Errorf("config: %v\n", config)
 		time.Sleep(time.Second * 60)
 	}
 }
@@ -223,52 +234,53 @@ func syncConfigStruct(configReader *ConfigReaderStruct) {
 			hlog.Errorf("failed to read config: %v\n", err)
 			continue
 		}
-		// hlog.Errorf("config: %v\n", config)
 		time.Sleep(time.Second * 60)
 	}
 }
 
 var configs = make(map[string]*Config)
+var mapOnce sync.Once
 
 func GetInstanceMap(path string) (config *Config, err error) {
 	if c, ok := configs[path]; ok {
 		config = c
 	} else {
-		lock.Lock()
-		defer lock.Unlock()
-		if c, ok := configs[path]; ok {
-			config = c
-		} else {
-			configReader := NewConfigReader(path)
-			config, err = configReader.getConfig()
-			if err != nil {
-				return
+		mapOnce.Do(func() {
+			if c, ok := configs[path]; ok {
+				config = c
+			} else {
+				configReader := NewConfigReader(path)
+				config, err = configReader.getConfig()
+				if err != nil {
+					return
+				}
+				go syncConfig(configReader)
 			}
-			go syncConfig(configReader)
-		}
+		})
 	}
 	return
 }
 
 var configsStruct = make(map[string]*ConfigStruct)
+var structOnce sync.Once
 
 func GetInstanceStruct(path string) (config *ConfigStruct, err error) {
 	if c, ok := configsStruct[path]; ok {
 		config = c
 	} else {
-		lock.Lock()
-		defer lock.Unlock()
-		if c, ok := configsStruct[path]; ok {
-			config = c
-		} else {
-			configReader := NewConfigReaderStruct(path)
-			config, err = configReader.getConfigStruct()
-			hlog.Debugf("config:%v", config)
-			if err != nil {
-				return
+		structOnce.Do(func() {
+			if c, ok := configsStruct[path]; ok {
+				config = c
+			} else {
+				configReader := NewConfigReaderStruct(path)
+				config, err = configReader.getConfigStruct()
+				hlog.Debugf("config:%v", config)
+				if err != nil {
+					return
+				}
+				go syncConfigStruct(configReader)
 			}
-			go syncConfigStruct(configReader)
-		}
+		})
 	}
 	return
 }
