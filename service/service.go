@@ -229,9 +229,11 @@ func (s *Service) Call(pidOrName interface{}, cmd string, args ...interface{}) (
 			// 集群那边的报错
 			case []interface{}:
 				lv := len(rv)
-				switch vv := rv[lv-1].(type) {
-				case error:
-					err = vv
+				if lv > 0 {
+					switch vv := rv[lv-1].(type) {
+					case error:
+						err = vv
+					}
 				}
 			case interface{}:
 				switch vv := rv.(type) {
