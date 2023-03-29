@@ -85,6 +85,7 @@ type ActorGroup struct {
 	Name    string
 	Actors  []*actor.PID
 	Balance int
+	Lock    sync.Mutex
 }
 
 type Service struct {
@@ -293,6 +294,32 @@ func (s *Service) Send(pidOrName interface{}, cmd string, args ...interface{}) (
 		ctx.Request(v, message)
 	default:
 		err = fmt.Errorf("send pidOrName type:%v invalid", pidOrName)
+	}
+	return
+}
+
+func (s *Service) Lock(pid *actor.PID) (err error) {
+	if name, ok := s.names[pid]; ok {
+		if ag, ok := s.actors[name]; ok {
+			ag.Lock.Lock()
+		} else {
+			err = fmt.Errorf("lock service:%s not found", name)
+		}
+	} else {
+		err = fmt.Errorf("lock pid:%s service name not found", pid.Id)
+	}
+	return
+}
+
+func (s *Service) Unlock(pid *actor.PID) (err error) {
+	if name, ok := s.names[pid]; ok {
+		if ag, ok := s.actors[name]; ok {
+			ag.Lock.Unlock()
+		} else {
+			err = fmt.Errorf("unlock service:%s not found", name)
+		}
+	} else {
+		err = fmt.Errorf("unlock pid:%s service name not found", pid.Id)
 	}
 	return
 }
