@@ -2,8 +2,9 @@ package skynet
 
 import (
 	"errors"
-	"fmt"
 	"sync"
+
+	"github.com/cloudwego/hertz/pkg/common/hlog"
 )
 
 var (
@@ -25,17 +26,17 @@ type Rpc struct {
 	sessions     map[int32]int
 }
 
-func (rpc *Rpc) Dispatch(msg *[]byte, sz uint16) (session uint32, data *MsgPart, padding bool, err error) {
-	var ok bool
+func (rpc *Rpc) Dispatch(msg *[]byte, sz uint16) (session uint32, ok bool, data *MsgPart, padding bool, err error) {
 	session, ok, data, padding, err = UnpcakResponse(msg, uint32(sz))
 	if err != nil {
+		hlog.Errorf("dispatch error:%s", err.Error())
 		return
 	}
 	if !ok {
-		err = fmt.Errorf("call error session:%d error:%s", session, string(*data.Msg))
+		ok = false
 		return
 	}
-
+	ok = true
 	return
 }
 

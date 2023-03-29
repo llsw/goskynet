@@ -158,7 +158,7 @@ func (c *Channel) DispatchOnce() (ok bool, err error) {
 
 	rpc := c.rpc
 
-	session, data, padding, err := rpc.Dispatch(msg, sz)
+	session, ok, data, padding, err := rpc.Dispatch(msg, sz)
 	// hlog.Debugf("DispatchOnce2 %d %v %v \n", session, *data, padding)
 	if err != nil {
 		if session != 0 {
@@ -205,10 +205,15 @@ func (c *Channel) DispatchOnce() (ok bool, err error) {
 			return
 		}
 	}
-	call.Resp = &Resp{
-		Session: session,
-		Data:    respData,
+	if ok {
+		call.Resp = &Resp{
+			Session: session,
+			Data:    respData,
+		}
+	} else {
+		call.Err = fmt.Errorf(respData[0].(string))
 	}
+
 	call.done()
 	ok = true
 	return
@@ -270,8 +275,10 @@ func (c *Channel) Call(addr interface{}, req ...interface{}) ([]interface{}, err
 	}
 	go c.Dispatch()
 	call = <-call.Done
-
-	return call.Resp.Data.([]interface{}), call.Err
+	if call.Err != nil {
+		return nil, call.Err
+	}
+	return call.Resp.Data.([]interface{}), nil
 }
 
 // encode notify packet

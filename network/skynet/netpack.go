@@ -442,6 +442,7 @@ func PackResponse(session uint32, ok bool, msg *[]byte, sz uint32) (padding []*M
 			buf[6] = byte(0)
 		}
 		copy(buf[7:reqsz], *msg)
+
 		padding[i] = &MsgPart{
 			Msg: &buf,
 			Sz:  reqsz,

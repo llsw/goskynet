@@ -111,17 +111,13 @@ func (c *Cluster) msg(ctx context.Context, conn network.Conn, addr interface{}, 
 	resps, err := c.handler(addr, session, args...)
 	if err != nil {
 		ok = false
-		errmsg := []byte(err.Error())
-		msg = &errmsg
-		msgsz = len(errmsg)
-	} else {
-		msg, msgsz, err = Pack(resps)
-		if err != nil {
-			ok = false
-			errmsg := []byte(err.Error())
-			msg = &errmsg
-			msgsz = len(errmsg)
-		}
+		resps = []interface{}{err.Error()}
+	}
+
+	msg, msgsz, err = Pack(resps)
+	if err != nil {
+		hlog.Errorf("pack msg error:%s resps:%v", err.Error(), resps)
+		return
 	}
 
 	msgs, err := PackResponse(session, ok, msg, uint32(msgsz))

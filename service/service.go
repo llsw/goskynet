@@ -67,7 +67,7 @@ type Acotr struct {
 }
 
 // 收到消息
-func (h *Acotr) Receive(ctx actor.Context) {
+func (a *Acotr) Receive(ctx actor.Context) {
 	Receive(ctx)
 }
 
@@ -219,9 +219,35 @@ func (s *Service) Call(pidOrName interface{}, cmd string, args ...interface{}) (
 			ag.Balance = (ag.Balance + 1) % len(ag.Actors)
 			act := ag.Actors[ag.Balance]
 			if act == nil {
-				return nil, fmt.Errorf("call service:%s not found", pidOrName)
+				return nil, fmt.Errorf(
+					"call service:%s not found", pidOrName)
 			}
-			return ctx.RequestFuture(act, message, 30*time.Second).Result()
+			resp, err := ctx.RequestFuture(
+				act, message, 30*time.Second).Result()
+
+			switch rv := resp.(type) {
+			// 集群那边的报错
+			case []interface{}:
+				lv := len(rv)
+				switch vv := rv[lv-1].(type) {
+				case error:
+					err = vv
+				}
+			case interface{}:
+				switch vv := rv.(type) {
+				case error:
+					err = vv
+				}
+			}
+			if err != nil {
+				if cmd != "Call" {
+					hlog.Errorf(
+						"sercice call:%v cmd:%s error:%s",
+						pidOrName, cmd, err.Error(),
+					)
+				}
+			}
+			return resp, err
 		} else {
 			return nil, fmt.Errorf("call service:%s not found", pidOrName)
 		}
@@ -274,13 +300,13 @@ func Receive(ctx actor.Context) {
 	case *Msg:
 		resp, err := CallMethod(ctx.Self().Id, msg.Cmd, msg.Args...)
 		if err != nil {
-			hlog.Errorf(
-				"pid:%s receive msg call method err:%s",
-				ctx.Self().Id, err.Error(),
-			)
+			// hlog.Errorf(
+			// 	"pid:%s receive msg call method:%s err:%s",
+			// 	ctx.Self().Id, msg.Cmd, err.Error(),
+			// )
 			ctx.Respond(err)
-			return
+		} else {
+			ctx.Respond(resp)
 		}
-		ctx.Respond(resp)
 	}
 }
