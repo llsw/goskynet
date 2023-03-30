@@ -336,6 +336,11 @@ func (s *Service) Unlock(pid *actor.PID, lockId int) (err error) {
 	if name, ok := s.names[pid]; ok {
 		if ag, ok := s.actors[name]; ok {
 			// 避免超时解了别人的锁，不一定加了锁就不会超卖，经典问题
+			// 这里还有问题，有可能刚解锁，加锁的线程还没来得及对锁id进行++，
+			// 也会出现解了别人锁的情况，本来对锁id的访问应该也加锁
+			// 但一般锁的超时时间定的都比业务执行时间长得多，
+			// 所以基本上很少出现业务解锁和超时解锁同时进行的情况
+			// 概率太低，对lockId的操作就不用锁了
 			if ag.Lock.Id == lockId {
 				// 使用select解锁，避免死锁
 				select {
