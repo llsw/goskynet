@@ -81,11 +81,16 @@ type AcotrService interface {
 	Stop(name string, pid *actor.PID) error
 }
 
+type Lock struct {
+	Id   int
+	Lock chan bool
+}
+
 type ActorGroup struct {
 	Name    string
 	Actors  []*actor.PID
 	Balance int
-	Lock    sync.Mutex
+	Lock    *Lock
 }
 
 type Service struct {
@@ -169,10 +174,15 @@ func (s *Service) newService(name string, service AcotrService) (pid *actor.PID,
 		if ag, ok := s.actors[name]; ok {
 			s.actors[name].Actors = append(ag.Actors, pid)
 		} else {
+			lock := &Lock{
+				Id:   0,
+				Lock: make(chan bool, 1),
+			}
 			s.actors[name] = &ActorGroup{
 				Name:    name,
 				Actors:  make([]*actor.PID, 0, 1),
 				Balance: 0,
+				Lock:    lock,
 			}
 			s.actors[name].Actors = append(s.actors[name].Actors, pid)
 		}
@@ -298,10 +308,16 @@ func (s *Service) Send(pidOrName interface{}, cmd string, args ...interface{}) (
 	return
 }
 
-func (s *Service) Lock(pid *actor.PID) (err error) {
+func (s *Service) Lock(pid *actor.PID, timeout int) (lockId int, err error) {
 	if name, ok := s.names[pid]; ok {
 		if ag, ok := s.actors[name]; ok {
-			ag.Lock.Lock()
+			// 请求锁
+			ag.Lock.Lock <- true
+			ag.Lock.Id++
+			lockId = ag.Lock.Id
+			time.AfterFunc(time.Duration(timeout), func() {
+				s.Unlock(pid, lockId)
+			})
 		} else {
 			err = fmt.Errorf("lock service:%s not found", name)
 		}
@@ -311,10 +327,17 @@ func (s *Service) Lock(pid *actor.PID) (err error) {
 	return
 }
 
-func (s *Service) Unlock(pid *actor.PID) (err error) {
+func (s *Service) Unlock(pid *actor.PID, lockId int) (err error) {
 	if name, ok := s.names[pid]; ok {
 		if ag, ok := s.actors[name]; ok {
-			ag.Lock.Unlock()
+			// 避免超时解了别人的锁，不一定加了锁就不会超卖，经典问题
+			if ag.Lock.Id == lockId {
+				// 使用select解锁，避免死锁
+				select {
+				case <-ag.Lock.Lock:
+				default:
+				}
+			}
 		} else {
 			err = fmt.Errorf("unlock service:%s not found", name)
 		}
