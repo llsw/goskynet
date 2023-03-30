@@ -31,7 +31,5 @@ make macosx
 5. 性能测试
 6. 数据与逻辑分离
 
-## 已知bug
-1. macosx下使用标准网络库同一链接只能处理一次请求
 ## 优雅的热重启
 ![hot_reload](img/hot_reload.jpg)

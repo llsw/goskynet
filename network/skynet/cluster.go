@@ -188,6 +188,10 @@ func (c *Cluster) socketStream(ctx context.Context, conn network.StreamConn) (er
 	return
 }
 
+/**
+标准网络库需要自己循环调用onData，不然只有第一次连接的时候会调用一次onData
+netpoll库有epoll事件循环，会自动调用onData
+**/
 func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 	switch conn := conn.(type) {
 	case network.Conn:
@@ -244,7 +248,7 @@ func (c *Cluster) ListenAndServe() (err error) {
 		c.transporter = netpoll.NewTransporter(opts)
 	case "darwin":
 		c.transporter = netpoll.NewTransporter(opts)
-		// TODO 标准网络库还有问题，只能同一个链接只能接受一次请求
+		// 标准网络库需要自己循环onData，不然只有第一次连接的时候会调用一次onData
 		// c.transporter = standard.NewTransporter(opts)
 	case "windows":
 		c.transporter = standard.NewTransporter(opts)
