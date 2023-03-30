@@ -1,7 +1,7 @@
 name: cluster2
 address: 0.0.0.0:1989
 version: "0.1.2"
-workers: 4
+workers: 0
 clustername: "./example/clustername.yaml"
 log:
   # 不指定路径就会输出到控制台

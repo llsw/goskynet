@@ -23,6 +23,7 @@ func main() {
 		)
 	}
 	go utils.DelayFunc(3, callIkun)
+	go utils.DelayFunc(3, callIkun)
 	hlog.Fatal(c.ListenAndServe())
 }
 

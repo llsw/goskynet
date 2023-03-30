@@ -261,7 +261,7 @@ func (c *Channel) Go(addr interface{}, session uint32, req []interface{}, done c
 	}
 	c.setSession(session, call)
 	for _, msg := range msgs {
-		c.WritePacket(*(msg.Msg), uint16(msg.Sz))
+		err = c.WritePacket(*(msg.Msg), uint16(msg.Sz))
 	}
 	return
 }

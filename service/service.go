@@ -203,7 +203,7 @@ func (s *Service) newService(name string,
 		)
 	} else {
 		hlog.Infof(
-			"service start ok name:%d pid:%s",
+			"service start ok name:%s pid:%s",
 			name, pid.Id,
 		)
 	}

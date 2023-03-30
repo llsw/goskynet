@@ -12,6 +12,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/network"
 	"github.com/cloudwego/hertz/pkg/network/netpoll"
 	"github.com/cloudwego/hertz/pkg/network/standard"
+	rawnet "github.com/cloudwego/netpoll"
 )
 
 type ClusterMsgHandler func(addr interface{}, session uint32, args ...interface{}) (resps []interface{}, err error)
@@ -201,10 +202,35 @@ func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 	return
 }
 
+func getRawConn(conn network.Conn) (rawnet.Conn, rawnet.Connection) {
+	conn1 := conn.(*netpoll.Conn)
+	conn2 := conn1.Conn.(rawnet.Conn)
+	conn3 := conn1.Conn.(rawnet.Connection)
+	return conn2, conn3
+}
+
 func (c *Cluster) newOpts() *config.Options {
 	// server.WithOnConnect 可以注册Connect回调
 	// server.WithOnAccept 可以注册Accept回调
-	return genOpts(server.WithHostPorts(c.addr))
+	return genOpts(
+		server.WithHostPorts(c.addr),
+		server.WithKeepAlive(true),
+		server.WithOnConnect(func(ctx context.Context, conn network.Conn) context.Context {
+			rawConn, rwaConnection := getRawConn(conn)
+			rwaConnection.AddCloseCallback(func(connection rawnet.Connection) error {
+				rawConn, _ := getRawConn(conn)
+				hlog.Debugf("on close fd:%d", rawConn.Fd())
+				return nil
+			})
+
+			hlog.Debugf("on connect fd:%d", rawConn.Fd())
+			return ctx
+		}),
+		server.WithOnAccept(func(conn net.Conn) context.Context {
+			// TODO WithOnAccept
+			return context.Background()
+		}),
+	)
 }
 
 func (c *Cluster) ListenAndServe() (err error) {
@@ -217,7 +243,9 @@ func (c *Cluster) ListenAndServe() (err error) {
 	case "linux":
 		c.transporter = netpoll.NewTransporter(opts)
 	case "darwin":
-		fallthrough
+		c.transporter = netpoll.NewTransporter(opts)
+		// TODO 标准网络库还有问题，只能同一个链接只能接受一次请求
+		// c.transporter = standard.NewTransporter(opts)
 	case "windows":
 		c.transporter = standard.NewTransporter(opts)
 	}

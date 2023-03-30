@@ -10,7 +10,7 @@ CLUSTER1_BINARY=${WORKDIR}/bin/$(PLAT)/cluster1
 
 CLUSTER2_SRC=${WORKDIR}/example/cluster2
 CLUSTER2_BINARY=${WORKDIR}/bin/$(PLAT)/cluster2
-all: clean cluster test
+all: clean cluster
 
 hello:
 	CGO_ENABLED=0 GOOS=${GOOS} GOARCH=${GOARCH} &&\
@@ -38,6 +38,25 @@ else
 	-@killall cluster2 || true
 	${CLUSTER1_BINARY} -c ${CLUSTER1_SRC}/config.yaml &
 	${CLUSTER2_BINARY} -c ${CLUSTER2_SRC}/config.yaml
+endif
+
+
+cluster1:
+ifeq ($(OS),Windows_NT)
+
+else ifeq ($(shell uname),Darwin)
+	${WORKDIR}/bin/macosx/cluster1 -c ${CLUSTER1_SRC}/config.yaml
+else
+	${WORKDIR}/bin/linux/cluster1 -c ${CLUSTER1_SRC}/config.yaml
+endif
+
+cluster2:
+ifeq ($(OS),Windows_NT)
+
+else ifeq ($(shell uname),Darwin)
+	${WORKDIR}/bin/macosx/cluster2 -c ${CLUSTER2_SRC}/config.yaml
+else
+	${WORKDIR}/bin/linux/cluster2 -c ${CLUSTER2_SRC}/config.yaml
 endif
 
 gotool:

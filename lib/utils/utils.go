@@ -6,6 +6,7 @@ import (
 	"os"
 	"time"
 
+	"github.com/cloudwego/hertz/pkg/common/hlog"
 	config "github.com/llsw/goskynet/lib/config"
 )
 
@@ -173,5 +174,16 @@ func PareClusterFlag(ver string) (cf *ClusterFlag, err error) {
 	}
 
 	cf = &ClusterFlag{ConfigPath: config}
+	return
+}
+
+func GetConifgPath(ver string) (path string, err error) {
+	var cf *ClusterFlag
+	cf, err = PareClusterFlag(ver)
+	if err != nil {
+		hlog.Fatalf(err.Error())
+		return
+	}
+	path = cf.ConfigPath
 	return
 }
