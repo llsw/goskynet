@@ -67,10 +67,6 @@ func packReqNumber(addr uint32, session uint32, msg *[]byte, sz uint32) (request
 		reqsz = sz + 11
 		// TODO 使用对象池，不要每次都申请内存，gc压力大
 		buf := make([]byte, reqsz)
-		if buf == nil {
-			err = fmt.Errorf("packReqNumber memmory error")
-			return
-		}
 		fillHeader(&buf, int(sz)+9)
 		buf[2] = 0
 		bufa := buf[3:7]
@@ -84,10 +80,6 @@ func packReqNumber(addr uint32, session uint32, msg *[]byte, sz uint32) (request
 		reqsz = 15
 		multipak = int(sz - uint32(1)/MULTI_PART + uint32(1))
 		buf := make([]byte, 15)
-		if buf == nil {
-			err = fmt.Errorf("packReqNumber multipak memmory error")
-			return
-		}
 		fillHeader(&buf, 13)
 		buf[2] = 1
 		bufa := buf[3:7]
@@ -107,10 +99,6 @@ func packReqString(addr string, session uint32, msg *[]byte, sz uint32) (request
 	if sz < MULTI_PART {
 		reqsz = sz + uint32(8) + uint32(namelen)
 		buf := make([]byte, reqsz)
-		if buf == nil {
-			err = fmt.Errorf("packReqString memmory error")
-			return
-		}
 		fillHeader(&buf, int(sz)+6+namelen)
 		buf[2] = 0x80
 		buf[3] = uint8(namelen)
@@ -124,10 +112,6 @@ func packReqString(addr string, session uint32, msg *[]byte, sz uint32) (request
 		reqsz = uint32(12 + namelen)
 		multipak = int(sz - uint32(1)/MULTI_PART + uint32(1))
 		buf := make([]byte, reqsz)
-		if buf == nil {
-			err = fmt.Errorf("packReqNumber multipak memmory error")
-			return
-		}
 		fillHeader(&buf, 10+namelen)
 		buf[2] = 0x81
 		buf[3] = uint8(namelen)
@@ -146,15 +130,9 @@ func packReqMulti(multipak int, session uint32, msg *[]byte, sz uint32, msgs []*
 		padding = msgs
 		return
 	}
-	buf := make([]byte, TEMP_LENGTH)
-	if buf == nil {
-		err = fmt.Errorf("packReqMulti memmory error")
-		return
-	}
 
 	part := (sz-1)/MULTI_PART + 1
 	index := uint32(0)
-	// padding = make([]*MsgPart, part)
 	for i := 0; i < int(part); i++ {
 		var reqsz uint32
 		var buf []byte
@@ -196,7 +174,8 @@ func packReqMulti(multipak int, session uint32, msg *[]byte, sz uint32, msgs []*
 	return
 }
 
-func PackRequest(addr interface{}, session uint32, msg *[]byte, sz uint32) (nextSession uint32, msgs []*MsgPart, err error) {
+func PackRequest(addr interface{}, session uint32,
+	msg *[]byte, sz uint32) (nextSession uint32, msgs []*MsgPart, err error) {
 	nextSession = session
 
 	if msg == nil {
@@ -241,14 +220,16 @@ func PackRequest(addr interface{}, session uint32, msg *[]byte, sz uint32) (next
 	return
 }
 
-func unpackReqNumber(msg *[]byte, sz uint32) (addr interface{}, session uint32, data *MsgPart, padding bool, err error) {
+func unpackReqNumber(msg *[]byte, sz uint32) (addr interface{},
+	session uint32, data *MsgPart, padding bool, err error) {
 	padding = false
 	bufa := (*msg)[1:5]
 	addr = unpackUint32(&bufa)
 	bufs := (*msg)[5:9]
 	session = unpackUint32(&bufs)
 	reqsz := sz - 9
-	dm := (*msg)[9:reqsz]
+	dm := make([]byte, reqsz)
+	copy(dm, (*msg)[9:sz])
 	data = &MsgPart{
 		Msg: &dm,
 		Sz:  reqsz,
@@ -256,9 +237,11 @@ func unpackReqNumber(msg *[]byte, sz uint32) (addr interface{}, session uint32, 
 	return
 }
 
-func unpackMReqNumber(msg *[]byte, sz uint32) (addr interface{}, session uint32, data *MsgPart, padding bool, err error) {
+func unpackMReqNumber(msg *[]byte, sz uint32) (addr interface{},
+	session uint32, data *MsgPart, padding bool, err error) {
 	if sz != 13 {
-		err = fmt.Errorf("invalid cluster message size %d multi req must be 13)", sz)
+		err = fmt.Errorf(
+			"invalid cluster message size %d multi req must be 13)", sz)
 		return
 	}
 	padding = true
@@ -274,9 +257,11 @@ func unpackMReqNumber(msg *[]byte, sz uint32) (addr interface{}, session uint32,
 	return
 }
 
-func unpackMReqPart(msg *[]byte, sz uint32) (addr interface{}, session uint32, data *MsgPart, padding bool, err error) {
+func unpackMReqPart(msg *[]byte, sz uint32) (addr interface{},
+	session uint32, data *MsgPart, padding bool, err error) {
 	if sz < 5 {
-		err = fmt.Errorf("invalid cluster message size %d multi part req must gt 5)", sz)
+		err = fmt.Errorf(
+			"invalid cluster message size %d multi part req must gt 5)", sz)
 		return
 	}
 	padding = ((*msg)[0] == 2)
@@ -284,7 +269,8 @@ func unpackMReqPart(msg *[]byte, sz uint32) (addr interface{}, session uint32, d
 	bufs := (*msg)[1:5]
 	session = unpackUint32(&bufs)
 	reqsz := sz - 5
-	dm := (*msg)[5:reqsz]
+	dm := make([]byte, reqsz)
+	copy(dm, (*msg)[5:sz])
 	data = &MsgPart{
 		Msg: &dm,
 		Sz:  reqsz,
@@ -292,20 +278,23 @@ func unpackMReqPart(msg *[]byte, sz uint32) (addr interface{}, session uint32, d
 	return
 }
 
-func unpackReqString(msg *[]byte, sz uint32) (addr interface{}, session uint32, data *MsgPart, padding bool, err error) {
+func unpackReqString(msg *[]byte, sz uint32) (addr interface{},
+	session uint32, data *MsgPart, padding bool, err error) {
 	padding = false
 	namesz := uint32((*msg)[1])
 	if sz < namesz+6 {
-		err = fmt.Errorf("unpackReqString invalid cluster message (size=%d)", sz)
+		err = fmt.Errorf(
+			"unpackReqString invalid cluster message (size=%d)", sz)
 		return
 	}
-	bufa := (*msg)[2 : 2+namesz]
+	bufa := make([]byte, namesz)
+	copy(bufa, (*msg)[2:2+namesz])
 	addr = string(bufa)
 	bufs := (*msg)[2+namesz : 6+namesz]
 	session = unpackUint32(&bufs)
 	reqsz := sz - 6 - namesz
-	dm := (*msg)[6+namesz : sz]
-	// hlog.Debugf("unpackReqString name:%s namesz:%d reqsz:%d %v", addr, namesz, reqsz, dm)
+	dm := make([]byte, reqsz)
+	copy(dm, (*msg)[6+namesz:sz])
 	data = &MsgPart{
 		Msg: &dm,
 		Sz:  reqsz,
@@ -313,18 +302,22 @@ func unpackReqString(msg *[]byte, sz uint32) (addr interface{}, session uint32, 
 	return
 }
 
-func unpackMReqString(msg *[]byte, sz uint32) (addr interface{}, session uint32, data *MsgPart, padding bool, err error) {
+func unpackMReqString(msg *[]byte, sz uint32) (addr interface{},
+	session uint32, data *MsgPart, padding bool, err error) {
 	if sz < 2 {
-		err = fmt.Errorf("unpackMReqString invalid cluster message (size=%d)", sz)
+		err = fmt.Errorf(
+			"unpackMReqString invalid cluster message (size=%d)", sz)
 		return
 	}
 	padding = true
 	namesz := uint32((*msg)[1])
 	if sz < namesz+10 {
-		err = fmt.Errorf("unpackMReqString invalid cluster message (size=%d)", sz)
+		err = fmt.Errorf(
+			"unpackMReqString invalid cluster message (size=%d)", sz)
 		return
 	}
-	bufa := (*msg)[2 : 2+namesz]
+	bufa := make([]byte, namesz)
+	copy(bufa, (*msg)[2:2+namesz])
 	addr = string(bufa)
 	bufs := (*msg)[2+namesz : 6+namesz]
 	session = unpackUint32(&bufs)
@@ -336,8 +329,8 @@ func unpackMReqString(msg *[]byte, sz uint32) (addr interface{}, session uint32,
 	return
 }
 
-func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{}, session uint32, data *MsgPart, padding bool, err error) {
-	// hlog.Debugf("UnpcakRequest %v", *msg)
+func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{},
+	session uint32, data *MsgPart, padding bool, err error) {
 	switch (*msg)[0] {
 	case 0:
 		addr, session, data, padding, err = unpackReqNumber(msg, sz)
@@ -355,7 +348,8 @@ func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{}, session uint32, da
 	return
 }
 
-func PackResponse(session uint32, ok bool, msg *[]byte, sz uint32) (padding []*MsgPart, err error) {
+func PackResponse(session uint32, ok bool,
+	msg *[]byte, sz uint32) (padding []*MsgPart, err error) {
 	if !ok {
 		if sz > MULTI_PART {
 			// truncate the error msg if too long
@@ -367,11 +361,6 @@ func PackResponse(session uint32, ok bool, msg *[]byte, sz uint32) (padding []*M
 			padding = make([]*MsgPart, part)
 			reqsz := sz + 11
 			buf := make([]byte, reqsz)
-			if buf == nil {
-				err = fmt.Errorf("packReqNumber multipak memmory error")
-				return
-			}
-
 			fillHeader(&buf, int(sz)+9)
 			bufs := buf[2:6]
 			fillUint32(&bufs, session)
@@ -461,14 +450,16 @@ func UnpcakResponse(msg *[]byte, sz uint32) (session uint32, ok bool, data *MsgP
 	switch (*msg)[4] {
 	case 0:
 		ok = false
-		dmsg := (*msg)[5:sz]
+		dmsg := make([]byte, sz-5)
+		copy(dmsg, (*msg)[5:sz])
 		data.Msg = &dmsg
 		data.Sz = sz - 5
 	case 1:
 		fallthrough
 	case 4:
 		ok = true
-		dmsg := (*msg)[5:sz]
+		dmsg := make([]byte, sz-5)
+		copy(dmsg, (*msg)[5:sz])
 		data.Msg = &dmsg
 		data.Sz = sz - 5
 	case 2:
@@ -483,7 +474,8 @@ func UnpcakResponse(msg *[]byte, sz uint32) (session uint32, ok bool, data *MsgP
 		padding = true
 	case 3:
 		ok = true
-		dmsg := (*msg)[5:sz]
+		dmsg := make([]byte, sz-5)
+		copy(dmsg, (*msg)[5:sz])
 		data.Msg = &dmsg
 		data.Sz = sz - 5
 		padding = true
@@ -500,10 +492,6 @@ func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
 	} else {
 		sz = unpackUint32(msgs[0].Msg)
 		buf := make([]byte, sz)
-		if buf == nil {
-			err = fmt.Errorf("packReqNumber multipak memmory error")
-			return
-		}
 		offset := uint32(0)
 		for i := 1; i < msgslen; i++ {
 			temp := msgs[i]
@@ -512,7 +500,8 @@ func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
 			offset += s
 		}
 		if offset != sz {
-			err = fmt.Errorf("Concat msg no enough sz:%d offset:%d", sz, offset)
+			err = fmt.Errorf(
+				"Concat msg no enough sz:%d offset:%d", sz, offset)
 			return
 		}
 		msg = &buf
@@ -714,7 +703,8 @@ func getInt(msg *[]byte, offset uint32, vc uint8) (roffset uint32, arg interface
 	return
 }
 
-func unpackOne(msg *[]byte, offset uint32, allsz uint32) (roffset uint32, arg interface{}, err error) {
+func unpackOne(msg *[]byte, offset uint32,
+	allsz uint32) (roffset uint32, arg interface{}, err error) {
 	if offset >= allsz-1 {
 		roffset = offset
 		return
@@ -725,30 +715,27 @@ func unpackOne(msg *[]byte, offset uint32, allsz uint32) (roffset uint32, arg in
 		roffset = offset
 		return
 	}
-	// hlog.Debugf("ffffff1 %d vtb:%d", roffset, vtb)
 	roffset, arg, err = pushValue(msg, offset, vtb, allsz)
-	// hlog.Debugf("ffffff2 %d vtb:%d", roffset, vtb)
 	if err != nil {
 		return
 	}
 	return
 }
 
-func getTableHash(msg *[]byte, offset uint32, allsz uint32) (roffset uint32, arg map[string]interface{}, err error) {
+func getTableHash(msg *[]byte, offset uint32,
+	allsz uint32) (roffset uint32, arg map[string]interface{}, err error) {
 	arg = make(map[string]interface{})
-	// st := time.Now().Unix()
+	st := time.Now().Unix()
 	for {
-		// if time.Now().Unix()-st > 1 {
-		// 	err = fmt.Errorf("getTableHash maybe infinite loop")
-		// 	break
-		// }
+		if time.Now().Unix()-st > 10 {
+			err = fmt.Errorf("getTableHash maybe infinite loop")
+			break
+		}
 		var (
 			k interface{}
 			v interface{}
 		)
-		// hlog.Debugf("getTableHash kkkkkk %d", offset)
 		offset, k, err = unpackOne(msg, offset, allsz)
-		// hlog.Debugf("ffffffkkkk %d", offset)
 		if err != nil {
 			break
 		}
@@ -762,7 +749,6 @@ func getTableHash(msg *[]byte, offset uint32, allsz uint32) (roffset uint32, arg
 		}
 
 		offset, v, err = unpackOne(msg, offset, allsz)
-		// hlog.Debugf("ffffffvvvvv %d k:%s v:%v ", offset, k, v)
 		if err != nil {
 			break
 		}
@@ -772,7 +758,6 @@ func getTableHash(msg *[]byte, offset uint32, allsz uint32) (roffset uint32, arg
 			break
 		}
 	}
-	// hlog.Debugf("getTableHash end %d %d, %v %v", offset, allsz, arg, err)
 	roffset = offset
 	return
 }
@@ -802,7 +787,6 @@ func getTableArray(msg *[]byte, offset uint32, vc uint8, allsz uint32) (roffset 
 		}
 	} else {
 		arraysz = vc
-		// hlog.Debugf("getTableArray ffffff %d ", offset)
 	}
 	var asz int
 	switch v := arraysz.(type) {
@@ -827,18 +811,17 @@ func getTableArray(msg *[]byte, offset uint32, vc uint8, allsz uint32) (roffset 
 	for i := 0; i < asz; i++ {
 		var item interface{}
 		offset, item, err = unpackOne(msg, offset, allsz)
-		// hlog.Debugf("getTableArray ffffff %d i:%d ", offset, i)
 		if err != nil {
 			return
 		}
 		arg[i] = item
 	}
-	// hlog.Debugf("getTableArray ffffff %d end ", offset)
 	roffset = offset
 	return
 }
 
-func getTable(msg *[]byte, offset uint32, vc uint8, allsz uint32) (roffset uint32, arg interface{}, err error) {
+func getTable(msg *[]byte, offset uint32,
+	vc uint8, allsz uint32) (roffset uint32, arg interface{}, err error) {
 	if vc == 0 {
 		offset, arg, err = getTableHash(msg, offset, allsz)
 		// hash table 已经跳过了最后面的pack的nil了
@@ -853,7 +836,8 @@ func getTable(msg *[]byte, offset uint32, vc uint8, allsz uint32) (roffset uint3
 	return
 }
 
-func pushValue(msg *[]byte, offset uint32, vtb uint8, allsz uint32) (roffset uint32, arg interface{}, err error) {
+func pushValue(msg *[]byte, offset uint32,
+	vtb uint8, allsz uint32) (roffset uint32, arg interface{}, err error) {
 	vt, vc := separateType(vtb)
 	switch vt {
 	case TYPE_NIL:
@@ -876,15 +860,21 @@ func pushValue(msg *[]byte, offset uint32, vtb uint8, allsz uint32) (roffset uin
 		offset += 8
 	case TYPE_SHORT_STRING:
 		start := offset
-		offset = start + uint32(vc)
-		arg = string((*msg)[start:offset])
+		l := uint32(vc)
+		offset = start + l
+		buf := make([]byte, l)
+		copy(buf, (*msg)[start:offset])
+		arg = string(buf)
 	case TYPE_LONG_STRING:
 		if vc == 2 {
 			start := offset
 			sz := binary.LittleEndian.Uint16((*msg)[start : start+2])
 			start = start + uint32(2)
-			offset = start + uint32(sz)
-			arg = (*msg)[start:offset]
+			l := uint32(sz)
+			offset = start + l
+			buf := make([]byte, l)
+			copy(buf, (*msg)[start:offset])
+			arg = buf
 		} else {
 			if vc != 4 {
 				err = fmt.Errorf("invalid serialize stream vc:%d", vc)
@@ -893,8 +883,11 @@ func pushValue(msg *[]byte, offset uint32, vtb uint8, allsz uint32) (roffset uin
 			start := offset
 			sz := binary.LittleEndian.Uint32((*msg)[start : start+4])
 			start = start + uint32(4)
-			offset = start + uint32(sz)
-			arg = string((*msg)[start:offset])
+			l := uint32(sz)
+			offset = start + l
+			buf := make([]byte, l)
+			copy(buf, (*msg)[start:offset])
+			arg = string(buf)
 		}
 	case TYPE_TABLE:
 		offset, arg, err = getTable(msg, offset, vc, allsz)
@@ -909,7 +902,6 @@ func Unpack(msg *[]byte, sz uint32) (args []interface{}, err error) {
 	args = make([]interface{}, 0, 10)
 	var offset uint32 = 0
 	st := time.Now().Unix()
-	// hlog.Debugf("Unpack sz:%d\n", sz)
 	for {
 		if time.Now().Unix()-st > 10 {
 			err = fmt.Errorf("unpack maybe infinite loop")
@@ -925,6 +917,5 @@ func Unpack(msg *[]byte, sz uint32) (args []interface{}, err error) {
 		}
 		args = append(args, arg)
 	}
-	// hlog.Debugf("Unpack end offset:%d\n", offset)
 	return
 }
