@@ -1,0 +1,10 @@
+name: cluster3
+address: 0.0.0.0:1990
+version: "0.1.2"
+workers: 0
+clustername: "./example/clustername.yaml"
+log:
+  # 不指定路径就会输出到控制台
+  # path: "./log/cluster3"
+  level: 1
+  interval: 86400

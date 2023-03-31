@@ -29,7 +29,7 @@ func (i *Ikun) Stop(name string, pid *actor.PID) (err error) {
 
 func (i *Ikun) Ikun(args1 string, args2 string) (string, string, string) {
 	hlog.Debugf("Ikun args1:%s args2:%s", args1, args2)
-	panic("test panic")
+	// panic("test panic")
 	return "唱跳", "rap", "篮球"
 }
 

@@ -138,12 +138,13 @@ func Open(clusterConfigPath string) (c *skynet.Cluster, close func(), err error)
 	return
 }
 
-func StartCluster(path string) (c *skynet.Cluster, close func(), err error) {
-	c, close, err = Open(path)
-	defer func() {
-		close()
-	}()
+func StartCluster(path string) (c *skynet.Cluster, close func()) {
+	go utils.RunNumGoroutineMonitor()
+	c, close, err := Open(path)
 	if err != nil {
+		if close != nil {
+			close()
+		}
 		hlog.Fatalf(
 			"start cluster fail, config:%s error:%s",
 			path, err.Error(),

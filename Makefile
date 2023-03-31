@@ -10,6 +10,9 @@ CLUSTER1_BINARY=${WORKDIR}/bin/$(PLAT)/cluster1
 
 CLUSTER2_SRC=${WORKDIR}/example/cluster2
 CLUSTER2_BINARY=${WORKDIR}/bin/$(PLAT)/cluster2
+
+CLUSTER3_SRC=${WORKDIR}/example/cluster3
+
 all: clean cluster
 
 hello:
@@ -58,6 +61,17 @@ else ifeq ($(shell uname),Darwin)
 else
 	${WORKDIR}/bin/linux/cluster2 -c ${CLUSTER2_SRC}/config.yaml
 endif
+
+
+cluster3:
+ifeq ($(OS),Windows_NT)
+
+else ifeq ($(shell uname),Darwin)
+	${WORKDIR}/bin/macosx/cluster2 -c ${CLUSTER3_SRC}/config.yaml
+else
+	${WORKDIR}/bin/linux/cluster2 -c ${CLUSTER3_SRC}/config.yaml
+endif
+
 
 gotool:
 	go fmt ${HELLO_SRC}

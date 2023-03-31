@@ -4,6 +4,7 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"runtime"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
@@ -177,13 +178,19 @@ func PareClusterFlag(ver string) (cf *ClusterFlag, err error) {
 	return
 }
 
-func GetConifgPath(ver string) (path string, err error) {
-	var cf *ClusterFlag
-	cf, err = PareClusterFlag(ver)
+func GetConifgPath(ver string) (path string) {
+	cf, err := PareClusterFlag(ver)
 	if err != nil {
 		hlog.Fatalf(err.Error())
 		return
 	}
 	path = cf.ConfigPath
 	return
+}
+
+func RunNumGoroutineMonitor() {
+	for {
+		hlog.Debugf("groutine ->%d\n", runtime.NumGoroutine())
+		time.Sleep(60 * time.Second)
+	}
 }

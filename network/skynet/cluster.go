@@ -3,6 +3,7 @@ package skynet
 import (
 	"context"
 	"encoding/binary"
+	"fmt"
 	"net"
 	"runtime"
 
@@ -145,45 +146,102 @@ func (c *Cluster) msg(ctx context.Context, conn network.Conn, addr interface{}, 
 }
 
 func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
-	szh, err := conn.ReadBinary(2)
-	if err != nil {
-		return
-	}
-	sz := binary.BigEndian.Uint16(szh)
-	buf, err := conn.ReadBinary(int(sz))
-	if err != nil {
-		return
-	}
-	addr, session, data, padding, err := UnpcakRequest(&buf, uint32(sz))
-	cconn := c.conns[conn]
-	if err != nil {
-		if cconn != nil {
-			delete(cconn.reqLargePkg, c.conns[conn].lastSession)
+	var (
+		szh     []byte
+		buf     []byte
+		addr    interface{}
+		session uint32
+		data    *MsgPart
+		padding bool
+		msg     *[]byte
+		dsz     uint32
+		skip    int
+	)
+
+	defer func() {
+		conn.Release()
+	}()
+
+	for {
+		skip = 2
+		// conn.SetReadTimeout(5 * time.Second)
+		szh, err = conn.Peek(skip)
+		if err != nil {
+			return
 		}
-		return
-	}
 
-	reqLargePkg, cconn := c.grabLargePkg(conn, session, addr)
-	cconn.reqLargePkg[session].Msgs = append(reqLargePkg.Msgs, data)
+		if len(szh) < skip {
+			conn.Skip(len(szh))
+			err = fmt.Errorf("pkg sz:%d error", len(szh))
+			return
+		}
 
-	if padding {
-		return
-	}
-	pkg := cconn.reqLargePkg[session]
-	addr = pkg.Addr
-	msgs := pkg.Msgs
-	var dsz uint32
-	// // hlog.Debugf("socket sz:%d", sz)
-	msg, dsz, err := Concat(msgs)
-	if err != nil {
+		sz := binary.BigEndian.Uint16(szh)
+		isz := int(sz)
+		skip = isz + 2
+		if conn.Len() < skip {
+			hlog.Debugf("pkg error %d, %d", skip, conn.Len())
+			// 包不完整，丢弃
+			conn.Skip(conn.Len())
+			return
+		}
+		buf, err = conn.Peek(skip)
+		if err != nil {
+			return
+		}
+
+		if len(buf) < isz {
+			err = fmt.Errorf(
+				"peek buf length not enough need:%d actual:%d", isz, len(buf),
+			)
+			return
+		}
+		conn.Skip(skip)
+		d := buf[2:isz]
+		addr, session, data, padding, err = UnpcakRequest(&d, uint32(sz))
+		cconn := c.conns[conn]
+
+		if err != nil {
+			if cconn != nil {
+				delete(cconn.reqLargePkg, c.conns[conn].lastSession)
+			}
+			return
+		}
+
+		reqLargePkg, cconn := c.grabLargePkg(conn, session, addr)
+		cconn.reqLargePkg[session].Msgs = append(reqLargePkg.Msgs, data)
+
+		if padding {
+			// if conn.Len() <= isz {
+			// 	return
+			// }
+			continue
+		}
+		pkg := cconn.reqLargePkg[session]
+		addr = pkg.Addr
+		msgs := pkg.Msgs
+		// // hlog.Debugf("socket sz:%d", sz)
+		msg, dsz, err = Concat(msgs)
+		if err != nil {
+			delete(cconn.reqLargePkg, session)
+			return
+		}
 		delete(cconn.reqLargePkg, session)
-		return
+		err = c.msg(ctx, conn, addr, session, msg, dsz)
+		if err != nil {
+			return
+		}
+		if err != nil {
+			return
+		}
+		if conn.Len() <= isz {
+			return
+		}
 	}
-	delete(cconn.reqLargePkg, session)
-	return c.msg(ctx, conn, addr, session, msg, dsz)
 }
 
-func (c *Cluster) socketStream(ctx context.Context, conn network.StreamConn) (err error) {
+func (c *Cluster) socketStream(ctx context.Context,
+	conn network.StreamConn) (err error) {
 	// TODO 如果需要steam的话
 	return
 }
@@ -195,7 +253,17 @@ netpoll库有epoll事件循环，会自动调用onData
 func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 	switch conn := conn.(type) {
 	case network.Conn:
-		err = c.socket(ctx, conn)
+		switch v := conn.(type) {
+		case *netpoll.Conn:
+			err = c.socket(ctx, v)
+		case *standard.Conn:
+			for {
+				err = c.socket(ctx, v)
+				if err != nil {
+					hlog.Errorf("on data err:%s\n", err.Error())
+				}
+			}
+		}
 	case network.StreamConn:
 		err = c.socketStream(ctx, conn)
 	}
@@ -203,14 +271,22 @@ func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 	if err != nil {
 		hlog.Errorf("on data err:%s\n", err.Error())
 	}
+	hlog.Debug("onData end")
 	return
 }
 
 func getRawConn(conn network.Conn) (rawnet.Conn, rawnet.Connection) {
-	conn1 := conn.(*netpoll.Conn)
-	conn2 := conn1.Conn.(rawnet.Conn)
-	conn3 := conn1.Conn.(rawnet.Connection)
-	return conn2, conn3
+
+	switch v := conn.(type) {
+	case *standard.Conn:
+		return nil, nil
+	case *netpoll.Conn:
+		conn1 := v
+		conn2 := conn1.Conn.(rawnet.Conn)
+		conn3 := conn1.Conn.(rawnet.Connection)
+		return conn2, conn3
+	}
+	return nil, nil
 }
 
 func (c *Cluster) newOpts() *config.Options {
@@ -221,13 +297,19 @@ func (c *Cluster) newOpts() *config.Options {
 		server.WithKeepAlive(true),
 		server.WithOnConnect(func(ctx context.Context, conn network.Conn) context.Context {
 			rawConn, rwaConnection := getRawConn(conn)
-			rwaConnection.AddCloseCallback(func(connection rawnet.Connection) error {
-				rawConn, _ := getRawConn(conn)
-				hlog.Debugf("on close fd:%d", rawConn.Fd())
-				return nil
-			})
+			if rwaConnection != nil {
+				rwaConnection.AddCloseCallback(func(connection rawnet.Connection) error {
+					rawConn, _ := getRawConn(conn)
+					if rawConn != nil {
+						hlog.Debugf("on close fd:%d", rawConn.Fd())
+					}
 
-			hlog.Debugf("on connect fd:%d", rawConn.Fd())
+					return nil
+				})
+			}
+			if rawConn != nil {
+				hlog.Debugf("on connect fd:%d", rawConn.Fd())
+			}
 			return ctx
 		}),
 		server.WithOnAccept(func(conn net.Conn) context.Context {
@@ -247,9 +329,9 @@ func (c *Cluster) ListenAndServe() (err error) {
 	case "linux":
 		c.transporter = netpoll.NewTransporter(opts)
 	case "darwin":
-		c.transporter = netpoll.NewTransporter(opts)
+		// c.transporter = netpoll.NewTransporter(opts)
 		// 标准网络库需要自己循环onData，不然只有第一次连接的时候会调用一次onData
-		// c.transporter = standard.NewTransporter(opts)
+		c.transporter = standard.NewTransporter(opts)
 	case "windows":
 		c.transporter = standard.NewTransporter(opts)
 	}

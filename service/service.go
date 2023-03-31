@@ -241,7 +241,7 @@ func (s *Service) callByPid(ctx *actor.RootContext,
 	if err != nil {
 		if cmd != "Call" {
 			hlog.Errorf(
-				"sercice call:%v cmd:%s error:%s",
+				"service call:%v cmd:%s error:%s",
 				s.names[pid], cmd, err.Error())
 		}
 	}

@@ -7,23 +7,26 @@ import (
 )
 
 func main() {
-	cf, err := utils.PareClusterFlag("v0.1.2")
-	if err != nil {
-		hlog.Fatalf(err.Error())
-		return
-	}
-	c, close, err := cluster.Open(cf.ConfigPath)
+	path := utils.GetConifgPath("v0.1.2")
+	c, close := cluster.StartCluster(path)
 	defer func() {
 		close()
 	}()
-	if err != nil {
-		hlog.Errorf(
-			"start cluster fail, config:%s error:%s",
-			cf.ConfigPath, err.Error(),
-		)
-	}
 	go utils.DelayFunc(3, callIkun)
 	go utils.DelayFunc(3, callIkun)
+	go utils.DelayFunc(3, callIkun)
+	go utils.DelayFunc(3, callIkun)
+	go utils.DelayFunc(3, callIkun)
+	go utils.DelayFunc(3, callIkun)
+	go utils.DelayFunc(3, callIkun)
+	go utils.DelayFunc(3, callIkun)
+
+	// go utils.DelayFunc(180, callIkun)
+	// go utils.DelayFunc(180, callIkun)
+	// go utils.DelayFunc(180, callIkun)
+	// go utils.DelayFunc(180, callIkun)
+	// go utils.DelayFunc(180, callIkun)
+
 	hlog.Fatal(c.ListenAndServe())
 }
 
