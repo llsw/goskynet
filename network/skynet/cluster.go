@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"runtime"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
 	"github.com/cloudwego/hertz/pkg/common/config"
@@ -102,15 +103,20 @@ func defalutHandler(addr interface{}, session uint32, args ...interface{}) (resp
 	return
 }
 
-func (c *Cluster) msg(ctx context.Context, conn network.Conn, addr interface{}, session uint32, msg *[]byte, sz uint32) (err error) {
-	var args []interface{}
-	args, err = Unpack(msg, sz)
-	if err != nil {
-		return
-	}
+func (c *Cluster) msg(ctx context.Context, conn network.Conn,
+	addr interface{}, session uint32, msgs []*MsgPart) (err error) {
+	msg, sz, err := Concat(msgs)
 	ok := true
 	var msgsz int
-	resps, err := c.handler(addr, session, args...)
+	var resps []interface{}
+	if err == nil {
+		var args []interface{}
+		args, err = Unpack(msg, sz)
+		if err == nil {
+			resps, err = c.handler(addr, session, args...)
+		}
+	}
+
 	if err != nil {
 		ok = false
 		resps = []interface{}{err.Error()}
@@ -122,30 +128,27 @@ func (c *Cluster) msg(ctx context.Context, conn network.Conn, addr interface{}, 
 		return
 	}
 
-	msgs, err := PackResponse(session, ok, msg, uint32(msgsz))
-
+	msgs, err = PackResponse(session, ok, msg, uint32(msgsz))
 	if err != nil {
+		hlog.Errorf("pack response msg error:%s resps:%v", err.Error(), resps)
 		return
 	}
 	for _, v := range msgs {
-		// hlog.Debugf("netpack.PackResponse %v ", *v.Msg)
 		_, err = conn.WriteBinary(*v.Msg)
-
 		if err != nil {
-			// // hlog.Debugf("conn.WriteBinary error:%v ", err)
 			return
 		}
 	}
 	// 要flush才会把包发出去
 	err = conn.Flush()
 	if err != nil {
-		// // hlog.Debugf("conn.Flush  error:%v ", err)
 		return
 	}
 	return
 }
 
 func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
+	hlog.Debug("socket start")
 	var (
 		szh     []byte
 		buf     []byte
@@ -153,58 +156,57 @@ func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
 		session uint32
 		data    *MsgPart
 		padding bool
-		msg     *[]byte
-		dsz     uint32
 		skip    int
+		reqNum  int
 	)
 
 	defer func() {
+		if err != nil {
+			cconn := c.conns[conn]
+			if cconn != nil && cconn.reqLargePkg != nil {
+				delete(cconn.reqLargePkg, c.conns[conn].lastSession)
+			}
+		}
 		conn.Release()
 	}()
 
+	reqNum = 0
+
 	for {
 		skip = 2
-		// conn.SetReadTimeout(5 * time.Second)
+		conn.SetReadTimeout(5 * time.Second)
 		szh, err = conn.Peek(skip)
 		if err != nil {
 			return
 		}
-
-		if len(szh) < skip {
-			conn.Skip(len(szh))
-			err = fmt.Errorf("pkg sz:%d error", len(szh))
-			return
-		}
-
 		sz := binary.BigEndian.Uint16(szh)
 		isz := int(sz)
 		skip = isz + 2
-		if conn.Len() < skip {
-			hlog.Debugf("pkg error %d, %d", skip, conn.Len())
-			// 包不完整，丢弃
-			conn.Skip(conn.Len())
-			return
+		rl := conn.Len()
+		if rl < skip {
+			reqNum++
+			if reqNum > 10 {
+				conn.Skip(rl)
+				err = fmt.Errorf(
+					"pack length error need:%d actual:%d", skip, rl,
+				)
+				return
+			}
+			continue
 		}
 		buf, err = conn.Peek(skip)
 		if err != nil {
 			return
 		}
-
-		if len(buf) < isz {
-			err = fmt.Errorf(
-				"peek buf length not enough need:%d actual:%d", isz, len(buf),
-			)
+		err = conn.Skip(skip)
+		if err != nil {
 			return
 		}
-		conn.Skip(skip)
 		d := buf[2:isz]
 		addr, session, data, padding, err = UnpcakRequest(&d, uint32(sz))
-		cconn := c.conns[conn]
 
 		if err != nil {
-			if cconn != nil {
-				delete(cconn.reqLargePkg, c.conns[conn].lastSession)
-			}
+			conn.Skip(rl)
 			return
 		}
 
@@ -212,29 +214,18 @@ func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
 		cconn.reqLargePkg[session].Msgs = append(reqLargePkg.Msgs, data)
 
 		if padding {
-			// if conn.Len() <= isz {
-			// 	return
-			// }
+			if rl <= isz {
+				return
+			}
 			continue
 		}
 		pkg := cconn.reqLargePkg[session]
 		addr = pkg.Addr
 		msgs := pkg.Msgs
-		// // hlog.Debugf("socket sz:%d", sz)
-		msg, dsz, err = Concat(msgs)
-		if err != nil {
-			delete(cconn.reqLargePkg, session)
-			return
-		}
 		delete(cconn.reqLargePkg, session)
-		err = c.msg(ctx, conn, addr, session, msg, dsz)
-		if err != nil {
-			return
-		}
-		if err != nil {
-			return
-		}
-		if conn.Len() <= isz {
+		go c.msg(ctx, conn, addr, session, msgs)
+
+		if rl <= isz {
 			return
 		}
 	}
@@ -271,7 +262,6 @@ func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 	if err != nil {
 		hlog.Errorf("on data err:%s\n", err.Error())
 	}
-	hlog.Debug("onData end")
 	return
 }
 
@@ -299,6 +289,7 @@ func (c *Cluster) newOpts() *config.Options {
 			rawConn, rwaConnection := getRawConn(conn)
 			if rwaConnection != nil {
 				rwaConnection.AddCloseCallback(func(connection rawnet.Connection) error {
+					c.conns[conn] = nil
 					rawConn, _ := getRawConn(conn)
 					if rawConn != nil {
 						hlog.Debugf("on close fd:%d", rawConn.Fd())
@@ -329,9 +320,9 @@ func (c *Cluster) ListenAndServe() (err error) {
 	case "linux":
 		c.transporter = netpoll.NewTransporter(opts)
 	case "darwin":
-		// c.transporter = netpoll.NewTransporter(opts)
+		c.transporter = netpoll.NewTransporter(opts)
 		// 标准网络库需要自己循环onData，不然只有第一次连接的时候会调用一次onData
-		c.transporter = standard.NewTransporter(opts)
+		// c.transporter = standard.NewTransporter(opts)
 	case "windows":
 		c.transporter = standard.NewTransporter(opts)
 	}
