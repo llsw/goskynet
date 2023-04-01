@@ -1,6 +1,7 @@
 package main
 
 import (
+	"sync"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
@@ -20,22 +21,28 @@ func main() {
 	hlog.Fatal(c.ListenAndServe())
 }
 
-func callIkun() {
+func callIkun(wg *sync.WaitGroup, index int) {
 	resp, err := cluster.Call("cluster1", "ikun", "Ikun", "hello", "ikun")
 	if err != nil {
-		hlog.Errorf("call cluster1 fail error:%s", err)
+		hlog.Errorf("call cluster1 fail index:%d error:%s", index, err)
+		wg.Done()
 		return
 	}
-	hlog.Infof("call cluster1 resp:%v", resp)
+	hlog.Infof("call cluster1 index:%d resp:%v", index, resp)
+	wg.Done()
 }
 
 func test() {
+	var wg *sync.WaitGroup = new(sync.WaitGroup)
 	st := time.Now().UnixMilli()
-	for i := 0; i < 10000; i++ {
-		go callIkun()
+	num := 2000
+	wg.Add(num)
+	for i := 0; i < num; i++ {
+		go callIkun(wg, i)
 	}
+	wg.Wait()
 	ed := time.Now().UnixMilli()
-	hlog.Debugf("cost:%f", st-ed/1000)
+	hlog.Debugf("qps:%d", ed-st)
 	// go utils.DelayFunc(180, callIkun)
 	// go utils.DelayFunc(180, callIkun)
 	// go utils.DelayFunc(180, callIkun)
