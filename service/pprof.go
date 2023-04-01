@@ -5,6 +5,7 @@ import (
 	"net/http"
 
 	"github.com/asynkron/protoactor-go/actor"
+	"github.com/gin-contrib/pprof"
 	"github.com/gin-gonic/gin"
 	"github.com/llsw/goskynet/lib/config"
 	cv "github.com/llsw/goskynet/lib/const"
