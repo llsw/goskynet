@@ -35,14 +35,14 @@ func callIkun(wg *sync.WaitGroup, index int) {
 func test() {
 	var wg *sync.WaitGroup = new(sync.WaitGroup)
 	st := time.Now().UnixMilli()
-	num := 2000
+	num := 10000
 	wg.Add(num)
 	for i := 0; i < num; i++ {
 		go callIkun(wg, i)
 	}
 	wg.Wait()
 	ed := time.Now().UnixMilli()
-	hlog.Debugf("qps:%d", ed-st)
+	hlog.Debugf("cost:%dms", ed-st)
 	// go utils.DelayFunc(180, callIkun)
 	// go utils.DelayFunc(180, callIkun)
 	// go utils.DelayFunc(180, callIkun)

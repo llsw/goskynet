@@ -3,7 +3,6 @@ package skynet
 import (
 	"context"
 	"encoding/binary"
-	"fmt"
 	"net"
 	"runtime"
 	"time"
@@ -52,6 +51,7 @@ func (c *Cluster) grabLargePkg(conn network.Conn,
 			c.conns[conn].lastSession = session
 			return msgs, ncl
 		} else {
+			// TODO 可以用对象池
 			c.conns[conn].reqLargePkg[session] = &ReqLargePkg{
 				Addr: addr,
 				Msgs: make([]*MsgPart, 0, 1),
@@ -175,7 +175,7 @@ func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
 
 	for {
 		skip = 2
-		conn.SetReadTimeout(5 * time.Second)
+		conn.SetReadTimeout(20 * time.Second)
 		szh, err = conn.Peek(skip)
 		if err != nil {
 			return
@@ -186,13 +186,14 @@ func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
 		rl := conn.Len()
 		if rl < skip {
 			reqNum++
-			if reqNum > 10 {
-				conn.Skip(rl)
-				err = fmt.Errorf(
-					"pack length error need:%d actual:%d", skip, rl,
-				)
-				return
-			}
+			// if reqNum > 100 {
+			// 	conn.Skip(rl)
+			// 	err = fmt.Errorf(
+			// 		"pack length error need:%d actual:%d", skip, rl,
+			// 	)
+			// 	return
+			// }
+			hlog.Debugf("sz:%d rl:%d", isz, rl)
 			continue
 		}
 		buf, err = conn.Peek(skip)
@@ -207,7 +208,7 @@ func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
 		addr, session, data, padding, err = UnpcakRequest(&d, uint32(sz))
 
 		if err != nil {
-			conn.Skip(rl)
+			// conn.Skip(rl)
 			return
 		}
 
@@ -215,9 +216,9 @@ func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
 		cconn.reqLargePkg[session].Msgs = append(reqLargePkg.Msgs, data)
 
 		if padding {
-			if rl <= isz {
-				return
-			}
+			// if rl <= isz {
+			// 	return
+			// }
 			continue
 		}
 		pkg := cconn.reqLargePkg[session]
@@ -226,9 +227,9 @@ func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
 		delete(cconn.reqLargePkg, session)
 		go c.msg(ctx, conn, addr, session, msgs)
 
-		if rl <= isz {
-			return
-		}
+		// if rl <= isz {
+		// 	return
+		// }
 	}
 }
 
@@ -258,6 +259,9 @@ func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 		}
 	case network.StreamConn:
 		err = c.socketStream(ctx, conn)
+	}
+	if err != nil {
+		hlog.Errorf("on data err:%s\n", err.Error())
 	}
 	return
 }

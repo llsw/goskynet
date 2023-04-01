@@ -76,10 +76,12 @@ func (c *Channel) grabSession(session uint32) *Call {
 	return nil
 }
 
+var reqNum = 0
+
 func (c *Channel) WritePacket(msg []byte, sz uint16) error {
 	c.writeMutex.Lock()
 	defer c.writeMutex.Unlock()
-
+	reqNum++
 	if sz > MSG_MAX_LEN {
 		return fmt.Errorf(
 			"message size(%d) should be less than %d",
@@ -90,14 +92,17 @@ func (c *Channel) WritePacket(msg []byte, sz uint16) error {
 	writer := c.rw.Writer()
 	_, err := writer.WriteBinary(msg)
 	writer.Flush()
+	hlog.Debugf("req num:%d", reqNum)
 	return err
 }
 
-func (c *Channel) readPacket() (reader netpoll.Reader, sz int, err error) {
-	// c.readMutex.Lock()
-	// defer c.readMutex.Unlock()
-	// stime := time.Now().UnixMilli()
+var respNum = 0
 
+func (c *Channel) readPacket() (reader netpoll.Reader, sz int, err error) {
+	c.readMutex.Lock()
+	defer c.readMutex.Unlock()
+	// stime := time.Now().UnixMilli()
+	respNum++
 	conn := c.rw.Reader()
 	szh, err := conn.Peek(2)
 	if err != nil {
@@ -107,6 +112,8 @@ func (c *Channel) readPacket() (reader netpoll.Reader, sz int, err error) {
 	sz = int(binary.BigEndian.Uint16(szh))
 
 	reader, err = conn.Slice(sz)
+
+	hlog.Debugf("resp num:%d", respNum)
 	if err != nil {
 		return
 	}
