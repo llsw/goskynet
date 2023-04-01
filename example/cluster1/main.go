@@ -12,7 +12,8 @@ func main() {
 	defer func() {
 		close()
 	}()
-
-	service.NewIkunService()
+	for i := 0; i < 50; i++ {
+		service.NewIkunService()
+	}
 	c.ListenAndServe()
 }
