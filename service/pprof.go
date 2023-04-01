@@ -32,7 +32,12 @@ func Ping(c *gin.Context) {
 }
 
 func (h *Pprof) Open(conf *config.PprofConifg) {
-
+	go func() {
+		r := gin.Default()
+		pprof.Register(r)
+		r.GET("/ping", Ping)
+		r.Run(conf.Address)
+	}()
 }
 
 // ===必须实现===
