@@ -15,6 +15,10 @@ import (
 
 var lock = &sync.Mutex{}
 
+type PprofConifg struct {
+	Address string `yaml:"address"`
+}
+
 type LogConfig struct {
 	Path     string     `yaml:"path"`
 	Level    hlog.Level `yaml:"level"`
@@ -23,12 +27,13 @@ type LogConfig struct {
 
 type ConfigStruct struct {
 	// 定义你的配置项
-	Name        string     `yaml:"name"`
-	Address     string     `yaml:"address"`
-	Version     string     `yaml:"Version"`
-	Workers     int        `yaml:"workers"`
-	Log         *LogConfig `yaml:"log"`
-	Clustername string     `yaml:"clustername"`
+	Name        string       `yaml:"name"`
+	Address     string       `yaml:"address"`
+	Version     string       `yaml:"Version"`
+	Workers     int          `yaml:"workers"`
+	Log         *LogConfig   `yaml:"log"`
+	Pprof       *PprofConifg `yaml:"pprof"`
+	Clustername string       `yaml:"clustername"`
 }
 
 type Config map[string]interface{}

@@ -8,3 +8,5 @@ log:
   # path: "./log/cluster3"
   level: 1
   interval: 86400
+pprof: 
+  address: 0.0.0.0:2000

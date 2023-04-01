@@ -6,6 +6,7 @@ import (
 	"github.com/asynkron/protoactor-go/actor"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	config "github.com/llsw/goskynet/lib/config"
+	cv "github.com/llsw/goskynet/lib/const"
 	log "github.com/llsw/goskynet/lib/log"
 	"github.com/llsw/goskynet/lib/utils"
 	skynet "github.com/llsw/goskynet/network/skynet"
@@ -98,8 +99,8 @@ func Send(req ...interface{}) (err error) {
 
 // ===自定义消息处理方法===
 
-func Open(clusterConfigPath string) (c *skynet.Cluster, close func(), err error) {
-	err = config.LoadClusterConfig(clusterConfigPath)
+func Open(configPath string) (c *skynet.Cluster, close func(), err error) {
+	err = config.LoadClusterConfig(configPath)
 	if err != nil {
 		hlog.Errorf("load cluster config error:%s", err.Error())
 		return
@@ -119,7 +120,7 @@ func Open(clusterConfigPath string) (c *skynet.Cluster, close func(), err error)
 		worker := Cluster{}
 		worker.name = name
 		worker.addr = "" // 空地址表示不监听
-		_, err = ins.newService("cluster", &worker)
+		_, err = ins.newService(cv.SERVICE.CENTER, &worker)
 		if err != nil {
 			hlog.Errorf("NewService cluster error:%s", err.Error())
 			return
@@ -129,7 +130,7 @@ func Open(clusterConfigPath string) (c *skynet.Cluster, close func(), err error)
 	master := Cluster{}
 	master.name = name
 	master.addr = adrr
-	_, err = ins.newService("cluster", &master)
+	_, err = ins.newService(cv.SERVICE.CENTER, &master)
 	if err != nil {
 		hlog.Errorf("NewService cluster error:%s", err.Error())
 		return
@@ -151,5 +152,20 @@ func StartCluster(path string) (c *skynet.Cluster, close func()) {
 		)
 		return
 	}
+
+	pc := config.GetInstance().Config.Pprof
+	NewPprofService()
+	_, err = GetInstance().Call(cv.SERVICE.PPROF, "Open", pc)
+	if err != nil {
+		if close != nil {
+			close()
+		}
+		hlog.Fatalf(
+			"start cluster fail, start %s error",
+			cv.SERVICE.PPROF,
+		)
+		return
+	}
+
 	return
 }

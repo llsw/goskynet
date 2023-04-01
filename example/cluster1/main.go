@@ -8,12 +8,11 @@ import (
 
 func main() {
 	path := utils.GetConifgPath("v0.1.2")
-
-	service.NewIkunService()
-
 	c, close := cluster.StartCluster(path)
 	defer func() {
 		close()
 	}()
+
+	service.NewIkunService()
 	c.ListenAndServe()
 }
