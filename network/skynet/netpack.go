@@ -440,7 +440,8 @@ func PackResponse(session uint32, ok bool,
 	return
 }
 
-func UnpcakResponse(msg *[]byte, sz uint32) (session uint32, ok bool, data *MsgPart, padding bool, err error) {
+func UnpcakResponse(msg *[]byte, sz uint32) (session uint32,
+	ok bool, data *MsgPart, padding bool, err error) {
 	if sz < 5 {
 		err = fmt.Errorf("UnpcakResponse msg sz < 5 sz:%d", sz)
 		return
@@ -673,7 +674,8 @@ func getFloat64(bytes []byte) float64 {
 	return math.Float64frombits(bits)
 }
 
-func getInt(msg *[]byte, offset uint32, vc uint8) (roffset uint32, arg interface{}, err error) {
+func getInt(msg *[]byte, offset uint32,
+	vc uint8) (roffset uint32, arg interface{}, err error) {
 	switch vc {
 	case TYPE_NUMBER_ZERO:
 		roffset = offset
@@ -762,7 +764,8 @@ func getTableHash(msg *[]byte, offset uint32,
 	return
 }
 
-func getTableArray(msg *[]byte, offset uint32, vc uint8, allsz uint32) (roffset uint32, arg []interface{}, err error) {
+func getTableArray(msg *[]byte, offset uint32,
+	vc uint8, allsz uint32) (roffset uint32, arg []interface{}, err error) {
 	var arraysz interface{}
 	if vc == MAX_COOKIE-1 {
 		offset, arraysz, err = getInt(msg, offset, 1)
