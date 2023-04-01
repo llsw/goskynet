@@ -3,12 +3,13 @@ package skynet
 import (
 	"encoding/binary"
 	"fmt"
-	"io"
 	"log"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/cloudwego/netpoll"
 )
 
 const (
@@ -44,7 +45,7 @@ type Channel struct {
 	rpc          *Rpc
 	readMutex    sync.Mutex // gates read one at a time
 	writeMutex   sync.Mutex // gates write one at a time
-	rw           io.ReadWriter
+	rw           netpoll.Connection
 	rdbuf        []byte // read buffer
 	wrbuf        []byte // write buffer
 	session      uint32
@@ -86,60 +87,40 @@ func (c *Channel) WritePacket(msg []byte, sz uint16) error {
 		)
 	}
 
-	// // hlog.Debugf("WritePacket sz:%d, msg:%v\n", sz, msg)
-
-	copy(c.wrbuf[:], msg)
-	_, err := c.rw.Write(c.wrbuf[:sz])
+	writer := c.rw.Writer()
+	_, err := writer.WriteBinary(msg)
+	writer.Flush()
 	return err
 }
 
-func (c *Channel) readPacket() (msg *[]byte, sz uint16, err error) {
+func (c *Channel) readPacket() (reader netpoll.Reader, sz int, err error) {
 	// c.readMutex.Lock()
 	// defer c.readMutex.Unlock()
 	// stime := time.Now().UnixMilli()
 
-	szh := c.rdbuf[0:2]
-	var n int
-	n, err = c.rw.Read(szh)
-	if err != nil || n < 2 {
+	conn := c.rw.Reader()
+	szh, err := conn.Peek(2)
+	if err != nil {
 		return
 	}
-	sz = binary.BigEndian.Uint16(szh)
+	conn.Skip(2)
+	sz = int(binary.BigEndian.Uint16(szh))
 
-	// hlog.Debugf(
-	// "readPacket head cost:%d n:%d sz:%d\n",
-	// time.Now().UnixMilli()-stime, n, sz,
-	// )
-	to := uint16(0)
-	// var to uint16 = 0
-	buf := c.rdbuf[2 : sz+2]
-	for to < sz-2 {
-		var n int
-		n, err = c.rw.Read(buf[to:])
-		if err != nil {
-			// // hlog.Debugf(
-			// 	"readPacket err: %s\n", err,
-			// )
-			return
-		}
-		to += uint16(n)
-		if n == 0 {
-			break
-		}
+	reader, err = conn.Slice(sz)
+	if err != nil {
+		return
 	}
-	sz = to
-	msg = &buf
 	return
 }
 
-func word2Int(bytes *[]byte, index int) int {
-	return int(binary.BigEndian.Uint16((*bytes)[index : index+2]))
-}
+// func word2Int(bytes *[]byte, index int) int {
+// 	return int(binary.BigEndian.Uint16((*bytes)[index : index+2]))
+// }
 
-func getInt16Bytes(bytes *[]byte, index int, x int) *[]byte {
-	binary.BigEndian.PutUint16((*bytes)[index:index+2], uint16(x))
-	return bytes
-}
+// func getInt16Bytes(bytes *[]byte, index int, x int) *[]byte {
+// 	binary.BigEndian.PutUint16((*bytes)[index:index+2], uint16(x))
+// 	return bytes
+// }
 
 func (c *Channel) grabLargePkg(session uint32) []*MsgPart {
 	if msgs, ok := c.largePkg[session]; ok {
@@ -150,16 +131,13 @@ func (c *Channel) grabLargePkg(session uint32) []*MsgPart {
 
 // dispatch one packet
 func (c *Channel) DispatchOnce() (ok bool, err error) {
-	msg, sz, err := c.readPacket()
-	// hlog.Debugf("DispatchOnce1 %d %v\n", msg, sz)
+	reader, sz, err := c.readPacket()
 	if err != nil {
 		return
 	}
 
 	rpc := c.rpc
-
-	session, ok, data, padding, err := rpc.Dispatch(msg, sz)
-	// hlog.Debugf("DispatchOnce2 %d %v %v \n", session, *data, padding)
+	session, ok, data, padding, err := rpc.Dispatch(reader, sz)
 	if err != nil {
 		if session != 0 {
 			delete(c.largePkg, session)
@@ -181,21 +159,19 @@ func (c *Channel) DispatchOnce() (ok bool, err error) {
 
 	msgs = c.largePkg[session]
 	var dsz uint32
+	var msg *[]byte
 	msg, dsz, err = Concat(msgs)
 
 	if err != nil {
 		return
 	}
 
-	// hlog.Debugf("DispatchOnce3 %d %v %v\n", session, *msg, dsz)
-
 	respData, err := Unpack(msg, dsz)
 	if err != nil {
-		hlog.Errorf("DispatchOnce error session:%d %v\n", session, err.Error())
+		hlog.Errorf(
+			"DispatchOnce error session:%d %v\n", session, err.Error())
 		return
 	}
-
-	// hlog.Debugf("DispatchOnce4 session:%d %v\n", session, respData)
 
 	delete(c.largePkg, session)
 
@@ -319,14 +295,29 @@ func (c *Channel) SetOnUnknownPacket(onUnknown OnUnknownPacket) {
 	c.onUnknown = onUnknown
 }
 
-func NewChannel(rw io.ReadWriter) (*Channel, error) {
+func NewChannel(addr string) (ch *Channel, err error) {
+	dialer := netpoll.NewDialer()
+	var conn netpoll.Connection
+	conn, err = dialer.DialConnection(
+		"tcp", addr, time.Duration(5*time.Second))
+	if err != nil {
+		panic("dial netpoll connection failed")
+	}
+
+	if err != nil {
+		hlog.Errorf(
+			"node new channel fail, addr:%s, error:%s\n",
+			addr, err.Error(),
+		)
+	}
+
 	rpc, err := NewRpc()
 	if err != nil {
 		return nil, err
 	}
 	return &Channel{
 		rpc:       rpc,
-		rw:        rw,
+		rw:        conn,
 		rdbuf:     make([]byte, MSG_MAX_LEN+2),
 		wrbuf:     make([]byte, MSG_MAX_LEN+2),
 		sessions:  make(map[uint32]*Call),

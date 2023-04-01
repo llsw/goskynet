@@ -42,7 +42,8 @@ func genOpts(opts ...config.Option) *config.Options {
 	return config.NewOptions(opts)
 }
 
-func (c *Cluster) grabLargePkg(conn network.Conn, session uint32, addr interface{}) (*ReqLargePkg, *ClusterConn) {
+func (c *Cluster) grabLargePkg(conn network.Conn,
+	session uint32, addr interface{}) (*ReqLargePkg, *ClusterConn) {
 	if ncl, ok := c.conns[conn]; ok {
 		if ncl.reqLargePkg == nil {
 			ncl.reqLargePkg = make(map[uint32]*ReqLargePkg)
@@ -258,10 +259,6 @@ func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 	case network.StreamConn:
 		err = c.socketStream(ctx, conn)
 	}
-
-	if err != nil {
-		hlog.Errorf("on data err:%s\n", err.Error())
-	}
 	return
 }
 
@@ -285,24 +282,25 @@ func (c *Cluster) newOpts() *config.Options {
 	return genOpts(
 		server.WithHostPorts(c.addr),
 		server.WithKeepAlive(true),
-		server.WithOnConnect(func(ctx context.Context, conn network.Conn) context.Context {
-			rawConn, rwaConnection := getRawConn(conn)
-			if rwaConnection != nil {
-				rwaConnection.AddCloseCallback(func(connection rawnet.Connection) error {
-					c.conns[conn] = nil
-					rawConn, _ := getRawConn(conn)
-					if rawConn != nil {
-						hlog.Debugf("on close fd:%d", rawConn.Fd())
-					}
-
-					return nil
-				})
-			}
-			if rawConn != nil {
-				hlog.Debugf("on connect fd:%d", rawConn.Fd())
-			}
-			return ctx
-		}),
+		server.WithOnConnect(
+			func(ctx context.Context, conn network.Conn) context.Context {
+				rawConn, rwaConnection := getRawConn(conn)
+				if rwaConnection != nil {
+					rwaConnection.AddCloseCallback(
+						func(connection rawnet.Connection) error {
+							c.conns[conn] = nil
+							rawConn, _ := getRawConn(conn)
+							if rawConn != nil {
+								hlog.Debugf("on close fd:%d", rawConn.Fd())
+							}
+							return nil
+						})
+				}
+				if rawConn != nil {
+					hlog.Debugf("on connect fd:%d", rawConn.Fd())
+				}
+				return ctx
+			}),
 		server.WithOnAccept(func(conn net.Conn) context.Context {
 			// TODO WithOnAccept
 			return context.Background()
@@ -334,33 +332,26 @@ func (c *Cluster) Open() (err error) {
 	return c.ListenAndServe()
 }
 
-func (c *Cluster) getChannel(node string) (channel *Channel, err error) {
-	if ch, ok := c.channels[node]; ok {
+func (c *Cluster) getChannel(addr string) (channel *Channel, err error) {
+	if ch, ok := c.channels[addr]; ok {
 		channel = ch
 		return
 	} else {
-		var conn net.Conn
-		conn, err = net.Dial("tcp", node)
+		c.channels[addr], err = NewChannel(addr)
 		if err != nil {
 			hlog.Errorf(
 				"node getChannel fail, node:%s, error:%s\n",
-				node, err.Error(),
-			)
-		}
-		c.channels[node], err = NewChannel(conn)
-		if err != nil {
-			hlog.Errorf(
-				"node getChannel fail, node:%s, error:%s\n",
-				node, err.Error(),
+				addr, err.Error(),
 			)
 			return
 		}
-		channel = c.channels[node]
+		channel = c.channels[addr]
 	}
 	return
 }
 
-func (c *Cluster) Call(node string, addr interface{}, req ...interface{}) (resp []interface{}, err error) {
+func (c *Cluster) Call(node string, addr interface{},
+	req ...interface{}) (resp []interface{}, err error) {
 	channel, err := c.getChannel(node)
 	if err != nil {
 		return
@@ -370,7 +361,8 @@ func (c *Cluster) Call(node string, addr interface{}, req ...interface{}) (resp 
 }
 
 // send没有回复
-func (c *Cluster) Send(node string, addr interface{}, req ...interface{}) (err error) {
+func (c *Cluster) Send(node string, addr interface{},
+	req ...interface{}) (err error) {
 	channel, err := c.getChannel(node)
 	if err != nil {
 		return
@@ -386,7 +378,8 @@ func (c *Cluster) GetAddr() string {
 	return c.addr
 }
 
-func NewCluster(name string, addr string, handler ClusterMsgHandler) (c *Cluster, err error) {
+func NewCluster(name string, addr string,
+	handler ClusterMsgHandler) (c *Cluster, err error) {
 
 	if handler == nil {
 		handler = defalutHandler

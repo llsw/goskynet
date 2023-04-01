@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/cloudwego/netpoll"
 )
 
 var (
@@ -26,8 +27,14 @@ type Rpc struct {
 	sessions     map[int32]int
 }
 
-func (rpc *Rpc) Dispatch(msg *[]byte, sz uint16) (session uint32, ok bool, data *MsgPart, padding bool, err error) {
-	session, ok, data, padding, err = UnpcakResponse(msg, uint32(sz))
+func (rpc *Rpc) Dispatch(reader netpoll.Reader, sz int) (session uint32, ok bool, data *MsgPart, padding bool, err error) {
+	var msg []byte
+	msg, err = reader.Next(sz)
+	if err != nil {
+		return
+	}
+	session, ok, data, padding, err = UnpcakResponse(&msg, uint32(sz))
+	reader.Release()
 	if err != nil {
 		hlog.Errorf("dispatch error:%s", err.Error())
 		return
@@ -39,11 +46,6 @@ func (rpc *Rpc) Dispatch(msg *[]byte, sz uint16) (session uint32, ok bool, data 
 	ok = true
 	return
 }
-
-// func (rpc *Rpc) ResponseEncode(session uint32, response interface{}) (data []byte, err error) {
-// 	// TODO ResponseEncode
-// 	return
-// }
 
 // session > 0: need response
 func (rpc *Rpc) RequestEncode(addr interface{}, session uint32, req []interface{}) (msgs []*MsgPart, err error) {
