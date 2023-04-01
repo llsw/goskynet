@@ -1,6 +1,8 @@
 package main
 
 import (
+	"time"
+
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	utils "github.com/llsw/goskynet/lib/utils"
 	cluster "github.com/llsw/goskynet/service"
@@ -12,20 +14,8 @@ func main() {
 	defer func() {
 		close()
 	}()
-	go utils.DelayFunc(3, callIkun)
-	go utils.DelayFunc(3, callIkun)
-	go utils.DelayFunc(3, callIkun)
-	go utils.DelayFunc(3, callIkun)
-	go utils.DelayFunc(3, callIkun)
-	go utils.DelayFunc(3, callIkun)
-	go utils.DelayFunc(3, callIkun)
-	go utils.DelayFunc(3, callIkun)
 
-	// go utils.DelayFunc(180, callIkun)
-	// go utils.DelayFunc(180, callIkun)
-	// go utils.DelayFunc(180, callIkun)
-	// go utils.DelayFunc(180, callIkun)
-	// go utils.DelayFunc(180, callIkun)
+	utils.DelayFunc(3, test)
 
 	hlog.Fatal(c.ListenAndServe())
 }
@@ -37,4 +27,18 @@ func callIkun() {
 		return
 	}
 	hlog.Infof("call cluster1 resp:%v", resp)
+}
+
+func test() {
+	st := time.Now().UnixMilli()
+	for i := 0; i < 10000; i++ {
+		go callIkun()
+	}
+	ed := time.Now().UnixMilli()
+	hlog.Debugf("cost:%f", st-ed/1000)
+	// go utils.DelayFunc(180, callIkun)
+	// go utils.DelayFunc(180, callIkun)
+	// go utils.DelayFunc(180, callIkun)
+	// go utils.DelayFunc(180, callIkun)
+	// go utils.DelayFunc(180, callIkun)
 }

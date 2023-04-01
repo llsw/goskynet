@@ -90,11 +90,11 @@ func (c *Cluster) Send(cluster string, addr string, req ...interface{}) (err err
 }
 
 func Call(req ...interface{}) (resp interface{}, err error) {
-	return GetInstance().Call("cluster", "Call", req...)
+	return GetInstance().Call(cv.SERVICE.CLUSTER, "Call", req...)
 }
 
 func Send(req ...interface{}) (err error) {
-	return GetInstance().Send("cluster", "Call", req...)
+	return GetInstance().Send(cv.SERVICE.CLUSTER, "Call", req...)
 }
 
 // ===自定义消息处理方法===
@@ -120,7 +120,7 @@ func Open(configPath string) (c *skynet.Cluster, close func(), err error) {
 		worker := Cluster{}
 		worker.name = name
 		worker.addr = "" // 空地址表示不监听
-		_, err = ins.newService(cv.SERVICE.CENTER, &worker)
+		_, err = ins.newService(cv.SERVICE.CLUSTER, &worker)
 		if err != nil {
 			hlog.Errorf("NewService cluster error:%s", err.Error())
 			return
@@ -130,7 +130,7 @@ func Open(configPath string) (c *skynet.Cluster, close func(), err error) {
 	master := Cluster{}
 	master.name = name
 	master.addr = adrr
-	_, err = ins.newService(cv.SERVICE.CENTER, &master)
+	_, err = ins.newService(cv.SERVICE.CLUSTER, &master)
 	if err != nil {
 		hlog.Errorf("NewService cluster error:%s", err.Error())
 		return

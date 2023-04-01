@@ -1,19 +1,19 @@
 package constv
 
 type cluster struct {
-	CENTER string
+	CLUSTER string
 }
 
 type service struct {
-	CENTER string
-	PPROF  string
+	CLUSTER string
+	PPROF   string
 }
 
 var CLUSTER = &cluster{
-	CENTER: "center",
+	CLUSTER: "cluster",
 }
 
 var SERVICE = &service{
-	CENTER: "center",
-	PPROF:  "pprof",
+	CLUSTER: "cluster",
+	PPROF:   "pprof",
 }
