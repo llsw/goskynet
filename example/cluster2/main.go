@@ -35,7 +35,7 @@ func callIkun(wg *sync.WaitGroup, index int) {
 func test() {
 	var wg *sync.WaitGroup = new(sync.WaitGroup)
 	st := time.Now().UnixMilli()
-	num := 100
+	num := 10000
 	wg.Add(num)
 	for i := 0; i < num; i++ {
 		go callIkun(wg, i)

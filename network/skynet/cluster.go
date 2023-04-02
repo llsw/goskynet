@@ -57,26 +57,28 @@ func genOpts(opts ...config.Option) *config.Options {
 func (c *Cluster) grabLargePkg(clusterConn *ClusterConn, conn network.Conn,
 	session uint32, addr interface{}) *ReqLargePkg {
 	if clusterConn == nil {
-		hlog.Debugf("clusterConn nil")
+		// hlog.Debugf("clusterConn nil")
 		return nil
 	}
 
 	if clusterConn.reqLargePkg == nil {
-		hlog.Debugf("reqLargePkg nil")
+		// hlog.Debugf("reqLargePkg nil")
 		return nil
 	}
+
+	// hlog.Debugf("dispatchReqOnce reqLargePkg session%d addr:%s", session, conn.RemoteAddr())
 
 	if msgs, ok := clusterConn.reqLargePkg[session]; ok {
 		clusterConn.lastSession = session
 		return msgs
 	} else {
-		clusterConn.once.Do(func() {
-			// TODO 可以用对象池
-			clusterConn.reqLargePkg[session] = &ReqLargePkg{
-				Addr: addr,
-				Msgs: make([]*MsgPart, 0, 1),
-			}
-		})
+		// clusterConn.once.Do(func() {
+		// TODO 可以用对象池
+		clusterConn.reqLargePkg[session] = &ReqLargePkg{
+			Addr: addr,
+			Msgs: make([]*MsgPart, 0, 1),
+		}
+		// })
 		clusterConn.lastSession = session
 		return clusterConn.reqLargePkg[session]
 	}
@@ -160,7 +162,7 @@ func (c *Cluster) msg(ctx context.Context, conn network.Conn,
 func (c *Cluster) dispatchReqOnce(req *req) {
 	reqLargePkg := c.grabLargePkg(req.cc, req.conn, req.session, req.addr)
 	if reqLargePkg == nil {
-		hlog.Debugf("dispatchReqOnce  reqLargePkg nil session%d", req.session)
+		// hlog.Debugf("dispatchReqOnce  reqLargePkg nil session%d addr:%s", req.session, req.conn.RemoteAddr())
 		return
 	}
 	req.cc.reqLargePkg[req.session].Msgs = append(reqLargePkg.Msgs, req.data)
@@ -172,6 +174,7 @@ func (c *Cluster) dispatchReqOnce(req *req) {
 	addr := pkg.Addr
 	msgs := pkg.Msgs
 	delete(req.cc.reqLargePkg, req.session)
+	// hlog.Debugf("delete session%d addr:%s", req.session, req.conn.RemoteAddr())
 	c.msg(req.ctx, req.conn, addr, req.session, msgs)
 }
 
@@ -179,6 +182,7 @@ func (c *Cluster) dispatchReq(reqChan chan *req) {
 	for r := range reqChan {
 		c.dispatchReqOnce(r)
 	}
+	hlog.Debugf("dispatch req loop end")
 }
 
 func (c *Cluster) socket(clusterConn *ClusterConn, ctx context.Context, conn network.Conn) (err error) {
@@ -223,7 +227,7 @@ func (c *Cluster) socket(clusterConn *ClusterConn, ctx context.Context, conn net
 			// 	)
 			// 	return
 			// }
-			hlog.Debugf("sz:%d rl:%d", isz, rl)
+			// hlog.Debugf("sz:%d rl:%d", isz, rl)
 			continue
 		}
 		buf, err = conn.Peek(skip)
