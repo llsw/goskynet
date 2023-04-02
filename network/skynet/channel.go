@@ -94,7 +94,7 @@ func (c *Channel) WritePacket(msg []byte, sz uint16) error {
 	writer := c.rw.Writer()
 	_, err := writer.WriteBinary(msg)
 	writer.Flush()
-	hlog.Debugf("req num:%d", reqNum)
+	// hlog.Debugf("req num:%d", reqNum)
 	return err
 }
 
@@ -115,7 +115,7 @@ func (c *Channel) readPacket() (reader netpoll.Reader, sz int, err error) {
 
 	reader, err = conn.Slice(sz)
 
-	hlog.Debugf("resp num:%d", respNum)
+	// hlog.Debugf("resp num:%d", respNum)
 	if err != nil {
 		return
 	}
@@ -311,18 +311,12 @@ func (c *Channel) Call(addr interface{}, req ...interface{}) ([]interface{}, err
 
 // invoke a Channel which has not a reply
 func (c *Channel) Invoke(addr interface{}, req []interface{}) error {
-
 	rpc := c.rpc
 	msgs, err := rpc.RequestEncode(addr, c.NextSession(), req)
 	if err != nil {
 		return err
 	}
-	for _, msg := range msgs {
-		err = c.WritePacket(*(msg.Msg), uint16(msg.Sz))
-		if err != nil {
-			return err
-		}
-	}
+	c.reqChan <- msgs
 	return err
 }
 

@@ -85,10 +85,11 @@ type Lock struct {
 }
 
 type ActorGroup struct {
-	Name    string
-	Actors  []*actor.PID
-	Balance int
-	Lock    *Lock
+	Name         string
+	Actors       []*actor.PID
+	Balance      int
+	BalancelLock sync.Mutex
+	Lock         *Lock
 }
 
 type Service struct {
@@ -248,11 +249,17 @@ func (s *Service) callByPid(ctx *actor.RootContext,
 	return resp, err
 }
 
+func (s *Service) getActor(ag *ActorGroup, name string) *actor.PID {
+	ag.BalancelLock.Lock()
+	defer ag.BalancelLock.Unlock()
+	ag.Balance = (ag.Balance + 1) % len(ag.Actors)
+	return ag.Actors[ag.Balance]
+}
+
 func (s *Service) callByName(ctx *actor.RootContext,
 	name string, cmd string, message *Msg) (interface{}, error) {
 	if ag, ok := s.actors[name]; ok {
-		ag.Balance = (ag.Balance + 1) % len(ag.Actors)
-		pid := ag.Actors[ag.Balance]
+		pid := s.getActor(ag, name)
 		if pid == nil {
 			return nil, fmt.Errorf(
 				"call service:%s not found", name)
@@ -282,8 +289,7 @@ func (s *Service) Call(pidOrName interface{},
 func (s *Service) sendByName(ctx *actor.RootContext,
 	name string, cmd string, message *Msg) error {
 	if ag, ok := s.actors[name]; ok {
-		ag.Balance = (ag.Balance + 1) % len(ag.Actors)
-		pid := ag.Actors[ag.Balance]
+		pid := s.getActor(ag, name)
 		if pid == nil {
 			return fmt.Errorf(
 				"call service:%s not found", name)

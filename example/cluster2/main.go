@@ -22,13 +22,13 @@ func main() {
 }
 
 func callIkun(wg *sync.WaitGroup, index int) {
-	resp, err := cluster.Call("cluster1", "ikun", "Ikun", "hello", "ikun")
+	_, err := cluster.Call("cluster1", "ikun", "Ikun", "hello", "ikun")
 	if err != nil {
 		hlog.Errorf("call cluster1 fail index:%d error:%s", index, err)
 		wg.Done()
 		return
 	}
-	hlog.Infof("call cluster1 index:%d resp:%v", index, resp)
+	// hlog.Infof("call cluster1 index:%d resp:%v", index, resp)
 	wg.Done()
 }
 

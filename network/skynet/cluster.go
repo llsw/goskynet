@@ -245,15 +245,16 @@ func (c *Cluster) socket(clusterConn *ClusterConn, ctx context.Context, conn net
 			// conn.Skip(rl)
 			return
 		}
-
-		clusterConn.reqChan <- &req{
-			cc:      clusterConn,
-			ctx:     ctx,
-			conn:    conn,
-			addr:    addr,
-			session: session,
-			data:    data,
-			padding: padding,
+		if clusterConn != nil {
+			clusterConn.reqChan <- &req{
+				cc:      clusterConn,
+				ctx:     ctx,
+				conn:    conn,
+				addr:    addr,
+				session: session,
+				data:    data,
+				padding: padding,
+			}
 		}
 
 		// if rl <= isz {
@@ -357,7 +358,7 @@ func (c *Cluster) newOpts() *config.Options {
 					rwaConnection.AddCloseCallback(
 						func(connection rawnet.Connection) error {
 							close(cc.reqChan)
-							c.conns[fd] = nil
+							delete(c.conns, fd)
 							c.connCount(-1)
 							rawConn, _ := getRawConn(conn)
 							if rawConn != nil {
@@ -426,7 +427,7 @@ func (c *Cluster) Call(node string, addr interface{},
 	if err != nil {
 		return
 	}
-	hlog.Debugf("addr:%v req:%v", addr, req)
+	// hlog.Debugf("addr:%v req:%v", addr, req)
 	return channel.Call(addr, req...)
 }
 
