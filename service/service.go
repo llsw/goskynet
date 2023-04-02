@@ -12,6 +12,8 @@ import (
 
 var onceIns sync.Once
 
+type CbFun = func(interface{}, error)
+
 type Method struct {
 	rcvr   reflect.Value
 	method reflect.Method
@@ -27,9 +29,11 @@ func (m *Method) call(req ...interface{}) (resp []interface{}, err error) {
 				err = fmt.Errorf("%s", v)
 
 			}
+			hlog.Debugf("call req:%v err %s ", req, err.Error())
 		}
 	}()
 	actually := len(req)
+
 	num := m.method.Type.NumIn()
 	in := make([]reflect.Value, actually+1)
 	in[0] = m.rcvr
@@ -249,6 +253,41 @@ func (s *Service) callByPid(ctx *actor.RootContext,
 	return resp, err
 }
 
+func (s *Service) callByPidNoBlock(ctx *actor.RootContext,
+	pid *actor.PID, cmd string, message *Msg, callback CbFun) {
+	index := len(message.Args) - 1
+	message.Args[index] = func(resp interface{}, err error) {
+		var res []interface{}
+		switch rt := resp.(type) {
+		// 集群那边的报错
+		case []interface{}:
+			lrt := len(rt)
+			if lrt > 0 {
+				switch v := rt[lrt-1].(type) {
+				case error:
+					err = v
+				}
+			}
+			res = rt
+		case interface{}:
+			switch v := rt.(type) {
+			case error:
+				err = v
+			}
+		}
+
+		if err != nil {
+			if cmd != "Call" {
+				hlog.Errorf(
+					"service call:%v cmd:%s error:%s",
+					s.names[pid], cmd, err.Error())
+			}
+		}
+		callback(res, err)
+	}
+	ctx.RequestFuture(pid, message, 30*time.Second)
+}
+
 func (s *Service) getActor(ag *ActorGroup, name string) *actor.PID {
 	ag.BalancelLock.Lock()
 	defer ag.BalancelLock.Unlock()
@@ -270,6 +309,20 @@ func (s *Service) callByName(ctx *actor.RootContext,
 	}
 }
 
+func (s *Service) callByNameNoBlock(ctx *actor.RootContext,
+	name string, cmd string, message *Msg, cb CbFun) {
+	if ag, ok := s.actors[name]; ok {
+		pid := s.getActor(ag, name)
+		if pid == nil {
+			cb(nil, fmt.Errorf("call service:%s not found", name))
+			return
+		}
+		s.callByPidNoBlock(ctx, pid, cmd, message, cb)
+	} else {
+		cb(nil, fmt.Errorf("call service:%s not found", name))
+	}
+}
+
 func (s *Service) Call(pidOrName interface{},
 	cmd string, args ...interface{}) (interface{}, error) {
 	message := &Msg{
@@ -284,6 +337,23 @@ func (s *Service) Call(pidOrName interface{},
 		return s.callByPid(ctx, v, cmd, message)
 	}
 	return nil, fmt.Errorf("call pidOrName type:%v invalid", pidOrName)
+}
+
+func (s *Service) CallNoBlock(pidOrName interface{},
+	cmd string, args ...interface{}) {
+	ll := len(args)
+	cb := args[ll-1].(CbFun)
+	message := &Msg{
+		Cmd:  cmd,
+		Args: args,
+	}
+	ctx := s.system.Root
+	switch v := pidOrName.(type) {
+	case string:
+		s.callByNameNoBlock(ctx, v, cmd, message, cb)
+	case *actor.PID:
+		s.callByPidNoBlock(ctx, v, cmd, message, cb)
+	}
 }
 
 func (s *Service) sendByName(ctx *actor.RootContext,
@@ -366,11 +436,33 @@ func (s *Service) Unlock(pid *actor.PID, lockId int) (err error) {
 func Receive(ctx actor.Context) {
 	switch msg := ctx.Message().(type) {
 	case *Msg:
-		resp, err := CallMethod(ctx.Self().Id, msg.Cmd, msg.Args...)
+		var f func(interface{}, error)
+		args := msg.Args
+		if msg.Cmd != "CallNoBlock" {
+			ll := len(args) - 1
+			if ll >= 0 {
+				switch v := args[ll].(type) {
+				case func(interface{}, error):
+					f = v
+					args = msg.Args[0:ll]
+				}
+			}
+		}
+		resp, err := CallMethod(ctx.Self().Id, msg.Cmd, args...)
 		if err != nil {
-			ctx.Respond(err)
+			if f != nil {
+				ctx.Respond(nil)
+				f(nil, err)
+			} else {
+				ctx.Respond(err)
+			}
 		} else {
-			ctx.Respond(resp)
+			if f != nil {
+				ctx.Respond(nil)
+				f(resp, err)
+			} else {
+				ctx.Respond(resp)
+			}
 		}
 	}
 }

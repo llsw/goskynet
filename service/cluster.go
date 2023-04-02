@@ -38,24 +38,33 @@ func (c *Cluster) Stop(name string, pid *actor.PID) (err error) {
 	return
 }
 
-func (c *Cluster) onData(addr interface{}, session uint32, args ...interface{}) (resp []interface{}, err error) {
+func (c *Cluster) onData(addr interface{}, session uint32, args ...interface{}) {
 	// hlog.Debugf("onData addr:%v session:%d, args:%v", addr, session, args)
+	index := len(args) - 1
+	f := args[index].(func([]interface{}, error))
+	var resp []interface{}
+	var err error
 	switch v := addr.(type) {
 	case string:
 		ins := GetInstance()
-		var res interface{}
-		res, err = ins.Call(v, args[0].(string), args[1:]...)
-		if err == nil {
-			switch v := res.(type) {
-			case error:
-				err = v
+		var cb CbFun = func(res interface{}, err error) {
+			if err == nil {
+				switch v := res.(type) {
+				case error:
+					err = v
+				}
+
+				if err == nil {
+					resp = res.([]interface{})
+				}
+				f(resp, err)
 			}
-			if err != nil {
-				break
-			}
-			resp = res.([]interface{})
-			// 本来是0才代表获取的是自己的，但go版skynet就不给服务编数字编号了，不直观
+			f(resp, err)
 		}
+		args[index] = cb
+		ins.CallNoBlock(v, args[0].(string), args[1:]...)
+		return
+	// 本来是0才代表获取的是自己的，但go版skynet就不给服务编数字编号了，不直观
 	case uint32:
 		resp = []interface{}{"cluster"}
 	default:
@@ -66,7 +75,7 @@ func (c *Cluster) onData(addr interface{}, session uint32, args ...interface{}) 
 	if err != nil {
 		hlog.Errorf("cluster handle call error addr:%v session:%d, error:%v", addr, session, err.Error())
 	}
-	return
+	f(resp, err)
 }
 
 // ===必须实现===
@@ -81,6 +90,17 @@ func (c *Cluster) Call(cluster string, addr string, req ...interface{}) (resp in
 	return c.worker.Call(node, addr, req...)
 }
 
+func (c *Cluster) CallNoBlock(cluster string, addr string, req ...interface{}) {
+	node, err := utils.GetClusterAddrByName(cluster)
+	if err != nil {
+		cb := req[len(req)-1].(CbFun)
+		cb(nil, err)
+		return
+	}
+	// hlog.Debugf("CallNoBlock %v", req)
+	c.worker.CallNoBlock(node, addr, req...)
+}
+
 func (c *Cluster) Send(cluster string, addr string, req ...interface{}) (err error) {
 	node, err := utils.GetClusterAddrByName(cluster)
 	if err != nil {
@@ -91,6 +111,10 @@ func (c *Cluster) Send(cluster string, addr string, req ...interface{}) (err err
 
 func Call(req ...interface{}) (resp interface{}, err error) {
 	return GetInstance().Call(cv.SERVICE.CLUSTER, "Call", req...)
+}
+
+func CallNoBlock(req ...interface{}) {
+	GetInstance().CallNoBlock(cv.SERVICE.CLUSTER, "CallNoBlock", req...)
 }
 
 func Send(req ...interface{}) (err error) {

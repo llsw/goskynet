@@ -29,16 +29,27 @@ func defaultOnUnknownPacket(session uint32, data interface{}) error {
 }
 
 type Call struct {
-	Resp *Resp
-	Err  error
-	Done chan *Call
+	Resp             *Resp
+	Err              error
+	DoneChan         chan *Call
+	ResponseCallback ResponseCallFun
 }
 
+type ResponseCallFun = func(c *Call)
+
+type CallbackFun = func(interface{}, error)
+
 func (call *Call) done() {
-	select {
-	case call.Done <- call:
-	default:
-		log.Panicf("method block")
+	if call.ResponseCallback != nil {
+		// hlog.Debugf("dddddddddd")
+		call.ResponseCallback(call)
+	} else {
+		// hlog.Debugf("ffffffffff")
+		select {
+		case call.DoneChan <- call:
+		default:
+			log.Panicf("method block")
+		}
 	}
 }
 
@@ -257,7 +268,7 @@ func (c *Channel) testMultiPkg(msgs []*MsgPart) {
 }
 
 // unblock call a Channel which has a reply
-func (c *Channel) Go(addr interface{}, session uint32, req []interface{}, done chan *Call) (call *Call, err error) {
+func (c *Channel) Go(addr interface{}, session uint32, req []interface{}, cb *Call, done chan *Call) (call *Call, err error) {
 	// stime := time.Now().UnixMilli()
 	rpc := c.rpc
 
@@ -265,22 +276,27 @@ func (c *Channel) Go(addr interface{}, session uint32, req []interface{}, done c
 	if msgs, err = rpc.RequestEncode(addr, session, req); err != nil {
 		return
 	}
-	if done == nil {
+	if cb == nil && done == nil {
 		done = make(chan *Call, 1)
 	} else {
-		if cap(done) == 0 {
-			switch addr.(type) {
-			case uint32:
-				err = fmt.Errorf("call addr:%d session:%d with unbuffered done channel", addr, session)
-			case string:
-				err = fmt.Errorf("call addr:%s session:%d with unbuffered done channel", addr, session)
+		if cb == nil && done != nil {
+			if cap(done) == 0 {
+				switch addr.(type) {
+				case uint32:
+					err = fmt.Errorf("call addr:%d session:%d with unbuffered done channel", addr, session)
+				case string:
+					err = fmt.Errorf("call addr:%s session:%d with unbuffered done channel", addr, session)
+				}
+				return
 			}
-			return
 		}
 	}
-	call = &Call{
-		Done: done,
+	if cb == nil {
+		cb = &Call{
+			DoneChan: done,
+		}
 	}
+	call = cb
 	c.setSession(session, call)
 
 	c.reqChan <- msgs
@@ -291,16 +307,37 @@ func (c *Channel) Go(addr interface{}, session uint32, req []interface{}, done c
 // block call a Channel which has a reply
 func (c *Channel) Call(addr interface{}, req ...interface{}) ([]interface{}, error) {
 	// level := mlog.GetLogLevel()
-	call, err := c.Go(addr, c.NextSession(), req, nil)
+	call, err := c.Go(addr, c.NextSession(), req, nil, nil)
 	if err != nil {
 		return nil, err
 	}
 
-	call = <-call.Done
+	call = <-call.DoneChan
 	if call.Err != nil {
 		return nil, call.Err
 	}
 	return call.Resp.Data.([]interface{}), nil
+}
+
+func (c *Channel) CallNoBlock(addr interface{}, req ...interface{}) {
+	// level := mlog.GetLogLevel()
+	index := len(req) - 1
+	f := req[index].(CallbackFun)
+	call := &Call{
+		ResponseCallback: func(rc *Call) {
+			// hlog.Debugf("rc %v f %v", rc.Resp.Data, f)
+			if rc.Err != nil {
+				f(nil, rc.Err)
+				return
+			}
+			f(rc.Resp.Data.([]interface{}), nil)
+		},
+	}
+	_, err := c.Go(addr, c.NextSession(), req[0:index], call, nil)
+	if err != nil {
+		f(nil, err)
+		return
+	}
 }
 
 // encode notify packet
@@ -354,7 +391,7 @@ func NewChannel(addr string) (ch *Channel, err error) {
 		largePkg:  make(map[uint32][]*MsgPart),
 		onUnknown: defaultOnUnknownPacket,
 		session:   0,
-		reqChan:   make(chan []*MsgPart, 100),
+		reqChan:   make(chan []*MsgPart, 500),
 	}
 
 	go ch.DispatchRes()

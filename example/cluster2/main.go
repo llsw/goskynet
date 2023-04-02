@@ -22,14 +22,15 @@ func main() {
 }
 
 func callIkun(wg *sync.WaitGroup, index int) {
-	_, err := cluster.Call("cluster1", "ikun", "Ikun", "hello", "ikun")
-	if err != nil {
-		hlog.Errorf("call cluster1 fail index:%d error:%s", index, err)
+	var cb cluster.CbFun = func(resp interface{}, err error) {
+		if err != nil {
+			hlog.Errorf("call cluster1 fail index:%d error:%s", index, err)
+			wg.Done()
+			return
+		}
 		wg.Done()
-		return
 	}
-	// hlog.Infof("call cluster1 index:%d resp:%v", index, resp)
-	wg.Done()
+	cluster.CallNoBlock("cluster1", "ikun", "Ikun", "hello", "ikun", cb)
 }
 
 func test() {
@@ -37,9 +38,14 @@ func test() {
 	st := time.Now().UnixMilli()
 	num := 10000
 	wg.Add(num)
-	for i := 0; i < num; i++ {
-		go callIkun(wg, i)
+	for i := 0; i < 10; i++ {
+		go func() {
+			for j := 0; j < num/10; j++ {
+				callIkun(wg, j)
+			}
+		}()
 	}
+
 	wg.Wait()
 	ed := time.Now().UnixMilli()
 	hlog.Debugf("cost:%dms", ed-st)

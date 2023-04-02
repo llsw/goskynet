@@ -12,7 +12,7 @@ func main() {
 	defer func() {
 		close()
 	}()
-	for i := 0; i < 50; i++ {
+	for i := 0; i < 12; i++ {
 		service.NewIkunService()
 	}
 	c.ListenAndServe()

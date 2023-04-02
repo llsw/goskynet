@@ -17,7 +17,7 @@ import (
 	rawnet "github.com/cloudwego/netpoll"
 )
 
-type ClusterMsgHandler func(addr interface{}, session uint32, args ...interface{}) (resps []interface{}, err error)
+type ClusterMsgHandler func(addr interface{}, session uint32, args ...interface{})
 
 type ReqLargePkg struct {
 	Addr interface{}
@@ -85,7 +85,7 @@ func (c *Cluster) grabLargePkg(clusterConn *ClusterConn, conn network.Conn,
 	}
 }
 
-func defalutHandler(addr interface{}, session uint32, args ...interface{}) (resps []interface{}, err error) {
+func defalutHandler(addr interface{}, session uint32, args ...interface{}) {
 	// 创建一个lua数据，包含nil，bool，int64，float64，string，切片和映射
 	// L := map[interface{}]interface{}{
 	// 	"nil":    nil,
@@ -96,8 +96,7 @@ func defalutHandler(addr interface{}, session uint32, args ...interface{}) (resp
 	// 	"slice":  []interface{}{int64(1), int64(2), int64(3)},
 	// 	"map":    map[interface{}]interface{}{"a": int64(1), "b": int64(2)}, // 这是你需要补充的部分
 	// }
-
-	resps = make([]interface{}, 10)
+	resps := make([]interface{}, 10)
 	array := []interface{}{1, 2, 3}
 	table := make(map[string]interface{})
 	table["who"] = "ikun"
@@ -113,51 +112,59 @@ func defalutHandler(addr interface{}, session uint32, args ...interface{}) (resp
 	resps[5] = true
 	resps[6] = array
 	resps[7] = table
-	return
+	cb := args[len(args)-1].(func([]interface{}, error))
+	cb(resps, nil)
 }
 
 func (c *Cluster) msg(ctx context.Context, conn network.Conn,
-	addr interface{}, session uint32, msgs []*MsgPart) (err error) {
+	addr interface{}, session uint32, msgs []*MsgPart) {
+
 	msg, sz, err := Concat(msgs)
 	ok := true
 	var msgsz int
 	var resps []interface{}
-	if err == nil {
-		var args []interface{}
-		args, err = Unpack(msg, sz)
-		if err == nil {
-			resps, err = c.handler(addr, session, args...)
+
+	cb := func(resps []interface{}, err error) {
+		if err != nil {
+			ok = false
+			resps = []interface{}{err.Error()}
 		}
-	}
 
-	if err != nil {
-		ok = false
-		resps = []interface{}{err.Error()}
-	}
+		msg, msgsz, err = Pack(resps)
+		if err != nil {
+			hlog.Errorf("pack msg error:%s resps:%v", err.Error(), resps)
+			return
+		}
 
-	msg, msgsz, err = Pack(resps)
-	if err != nil {
-		hlog.Errorf("pack msg error:%s resps:%v", err.Error(), resps)
-		return
-	}
-
-	msgs, err = PackResponse(session, ok, msg, uint32(msgsz))
-	if err != nil {
-		hlog.Errorf("pack response msg error:%s resps:%v", err.Error(), resps)
-		return
-	}
-	for _, v := range msgs {
-		_, err = conn.WriteBinary(*v.Msg)
+		msgs, err = PackResponse(session, ok, msg, uint32(msgsz))
+		if err != nil {
+			hlog.Errorf("pack response msg error:%s resps:%v", err.Error(), resps)
+			return
+		}
+		for _, v := range msgs {
+			_, err = conn.WriteBinary(*v.Msg)
+			if err != nil {
+				return
+			}
+		}
+		// 要flush才会把包发出去
+		err = conn.Flush()
 		if err != nil {
 			return
 		}
 	}
-	// 要flush才会把包发出去
-	err = conn.Flush()
-	if err != nil {
-		return
+
+	if err == nil {
+		var args []interface{}
+		args, err = Unpack(msg, sz)
+		if err == nil {
+			args = append(args, cb)
+			c.handler(addr, session, args...)
+			return
+		}
 	}
-	return
+
+	cb(resps, err)
 }
 
 func (c *Cluster) dispatchReqOnce(req *req) {
@@ -187,7 +194,7 @@ func (c *Cluster) dispatchReq(reqChan chan *req) {
 }
 
 func (c *Cluster) socket(clusterConn *ClusterConn, ctx context.Context, conn network.Conn) (err error) {
-	hlog.Debug("socket start")
+	// hlog.Debug("socket start")
 
 	defer func() {
 		if err != nil {
@@ -320,7 +327,7 @@ func (c *Cluster) connCount(num int) {
 	c.countLock.Lock()
 	defer c.countLock.Unlock()
 	connNum = connNum + num
-	hlog.Debugf("conn num:%d", connNum)
+	// hlog.Debugf("conn num:%d", connNum)
 }
 
 func (c *Cluster) initConn(fd int) (cc *ClusterConn) {
@@ -333,7 +340,7 @@ func (c *Cluster) initConn(fd int) (cc *ClusterConn) {
 		cc = &ClusterConn{
 			lastSession: 0,
 			reqLargePkg: make(map[uint32]*ReqLargePkg),
-			reqChan:     make(chan *req, 100),
+			reqChan:     make(chan *req, 500),
 		}
 		c.conns[fd] = cc
 		go c.dispatchReq(cc.reqChan)
@@ -368,7 +375,7 @@ func (c *Cluster) newOpts() *config.Options {
 						})
 				}
 				if rawConn != nil {
-					hlog.Debugf("on connect fd:%d", rawConn.Fd())
+					// hlog.Debugf("on connect fd:%d", rawConn.Fd())
 				}
 				return ctx
 			}),
@@ -429,6 +436,17 @@ func (c *Cluster) Call(node string, addr interface{},
 	}
 	// hlog.Debugf("addr:%v req:%v", addr, req)
 	return channel.Call(addr, req...)
+}
+
+func (c *Cluster) CallNoBlock(node string, addr interface{},
+	req ...interface{}) {
+	channel, err := c.getChannel(node)
+	if err != nil {
+		f := req[len(req)-1].(CallbackFun)
+		f(nil, err)
+		return
+	}
+	channel.CallNoBlock(addr, req...)
 }
 
 // send没有回复
