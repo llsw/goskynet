@@ -45,9 +45,10 @@ type Cluster struct {
 	addr        string
 	channels    map[string]*Channel
 	transporter network.Transporter
-	conns       map[network.Conn]*ClusterConn
+	conns       map[int]*ClusterConn
 	handler     ClusterMsgHandler
 	connLock    sync.Mutex
+	countLock   sync.Mutex
 }
 
 func genOpts(opts ...config.Option) *config.Options {
@@ -276,16 +277,19 @@ func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 	case network.Conn:
 		switch v := conn.(type) {
 		case *netpoll.Conn:
-			cc := c.initConn(conn)
+			rawConn, _ := getRawConn(conn)
+			cc := c.initConn(rawConn.Fd())
 			err = c.socket(cc, ctx, v)
-		case *standard.Conn:
-			cc := c.initConn(conn)
-			for {
-				err = c.socket(cc, ctx, v)
-				if err != nil {
-					hlog.Errorf("on data err:%s\n", err.Error())
-				}
-			}
+			// case *standard.Conn:
+			// 	// TODO 标准网络获取fd
+			// 	rawConn, _ := getRawConn(conn)
+			// 	cc := c.initConn(rawConn.Fd())
+			// 	for {
+			// 		err = c.socket(cc, ctx, v)
+			// 		if err != nil {
+			// 			hlog.Errorf("on data err:%s\n", err.Error())
+			// 		}
+			// 	}
 		}
 	case network.StreamConn:
 		err = c.socketStream(ctx, conn)
@@ -309,10 +313,19 @@ func getRawConn(conn network.Conn) (rawnet.Conn, rawnet.Connection) {
 	return nil, nil
 }
 
-func (c *Cluster) initConn(conn network.Conn) (cc *ClusterConn) {
+var connNum = 0
+
+func (c *Cluster) connCount(num int) {
+	c.countLock.Lock()
+	defer c.countLock.Unlock()
+	connNum = connNum + num
+	hlog.Debugf("conn num:%d", connNum)
+}
+
+func (c *Cluster) initConn(fd int) (cc *ClusterConn) {
 	c.connLock.Lock()
 	defer c.connLock.Unlock()
-	if clusterConn, ok := c.conns[conn]; ok {
+	if clusterConn, ok := c.conns[fd]; ok {
 		cc = clusterConn
 	} else {
 		// TODO 可以用对象池
@@ -321,8 +334,9 @@ func (c *Cluster) initConn(conn network.Conn) (cc *ClusterConn) {
 			reqLargePkg: make(map[uint32]*ReqLargePkg),
 			reqChan:     make(chan *req, 100),
 		}
-		c.conns[conn] = cc
+		c.conns[fd] = cc
 		go c.dispatchReq(cc.reqChan)
+		c.connCount(1)
 	}
 	return cc
 }
@@ -335,16 +349,19 @@ func (c *Cluster) newOpts() *config.Options {
 		server.WithKeepAlive(true),
 		server.WithOnConnect(
 			func(ctx context.Context, conn network.Conn) context.Context {
-				c.initConn(conn)
 				rawConn, rwaConnection := getRawConn(conn)
+				fd := rawConn.Fd()
+				cc := c.initConn(fd)
+
 				if rwaConnection != nil {
 					rwaConnection.AddCloseCallback(
 						func(connection rawnet.Connection) error {
-							close(c.conns[conn].reqChan)
-							c.conns[conn] = nil
+							close(cc.reqChan)
+							c.conns[fd] = nil
+							c.connCount(-1)
 							rawConn, _ := getRawConn(conn)
 							if rawConn != nil {
-								hlog.Debugf("on close fd:%d", rawConn.Fd())
+								hlog.Debugf("on close fd:%d", fd)
 							}
 							return nil
 						})
@@ -441,7 +458,7 @@ func NewCluster(name string, addr string,
 		name:     name,
 		addr:     addr,
 		channels: make(map[string]*Channel),
-		conns:    make(map[network.Conn]*ClusterConn),
+		conns:    make(map[int]*ClusterConn),
 		handler:  handler,
 	}
 	if err != nil {
