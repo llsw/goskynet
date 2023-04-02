@@ -28,6 +28,7 @@ func callIkun(wg *sync.WaitGroup, index int) {
 			wg.Done()
 			return
 		}
+		// hlog.Debugf("res %v", resp)
 		wg.Done()
 	}
 	cluster.CallNoBlock("cluster1", "ikun", "Ikun", "hello", "ikun", cb)
