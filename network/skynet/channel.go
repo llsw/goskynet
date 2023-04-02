@@ -3,6 +3,7 @@ package skynet
 import (
 	"encoding/binary"
 	"fmt"
+	"io"
 	"log"
 	"sync"
 	"sync/atomic"
@@ -54,6 +55,7 @@ type Channel struct {
 	sessions     map[uint32]*Call
 	largePkg     map[uint32][]*MsgPart
 	onUnknown    OnUnknownPacket
+	reqChan      chan []*MsgPart
 }
 
 func (c *Channel) NextSession() uint32 {
@@ -137,7 +139,7 @@ func (c *Channel) grabLargePkg(session uint32) []*MsgPart {
 }
 
 // dispatch one packet
-func (c *Channel) DispatchOnce() (ok bool, err error) {
+func (c *Channel) DispatchResOnce() (ok bool, err error) {
 	reader, sz, err := c.readPacket()
 	if err != nil {
 		return
@@ -203,16 +205,40 @@ func (c *Channel) DispatchOnce() (ok bool, err error) {
 }
 
 // dispatch until error
-func (c *Channel) Dispatch() (err error) {
+func (c *Channel) DispatchRes() {
 	for {
-		var ok bool
-		ok, err = c.DispatchOnce()
+		_, err := c.DispatchResOnce()
 
-		if ok {
-			return
+		// if ok {
+		// 	return
+		// }
+		if err != nil && err == io.EOF {
+			if err == io.EOF {
+				return
+			}
+			hlog.Debugf("dispatch error:%s", err.Error())
+			// return
 		}
+	}
+}
+
+func (c *Channel) DispatchReqOnce(msgs []*MsgPart) (err error) {
+	for _, msg := range msgs {
+		err = c.WritePacket(*(msg.Msg), uint16(msg.Sz))
 		if err != nil {
 			return
+		}
+	}
+	return
+}
+
+// dispatch until error
+func (c *Channel) DispatchReq() {
+	for {
+		req := <-c.reqChan
+		err := c.DispatchReqOnce(req)
+		if err != nil {
+			hlog.Debugf("dispatch error:%s", err.Error())
 		}
 	}
 }
@@ -222,7 +248,12 @@ func (c *Channel) testMultiPkg(msgs []*MsgPart) {
 		// wrong data
 		00, 99, 1,
 	}
-	c.WritePacket(msg, uint16(len(msg)))
+	msgs = make([]*MsgPart, 1)
+	msgs[0] = &MsgPart{
+		Msg: &msg,
+		Sz:  uint32(len(msg)),
+	}
+	c.reqChan <- msgs
 }
 
 // unblock call a Channel which has a reply
@@ -252,11 +283,8 @@ func (c *Channel) Go(addr interface{}, session uint32, req []interface{}, done c
 	}
 	c.setSession(session, call)
 
+	c.reqChan <- msgs
 	// c.testMultiPkg(msgs)
-
-	for _, msg := range msgs {
-		err = c.WritePacket(*(msg.Msg), uint16(msg.Sz))
-	}
 	return
 }
 
@@ -267,7 +295,7 @@ func (c *Channel) Call(addr interface{}, req ...interface{}) ([]interface{}, err
 	if err != nil {
 		return nil, err
 	}
-	go c.Dispatch()
+
 	call = <-call.Done
 	if call.Err != nil {
 		return nil, call.Err
@@ -322,7 +350,8 @@ func NewChannel(addr string) (ch *Channel, err error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Channel{
+
+	ch = &Channel{
 		rpc:       rpc,
 		rw:        conn,
 		rdbuf:     make([]byte, MSG_MAX_LEN+2),
@@ -331,5 +360,11 @@ func NewChannel(addr string) (ch *Channel, err error) {
 		largePkg:  make(map[uint32][]*MsgPart),
 		onUnknown: defaultOnUnknownPacket,
 		session:   0,
-	}, nil
+		reqChan:   make(chan []*MsgPart, 100),
+	}
+
+	go ch.DispatchRes()
+	go ch.DispatchReq()
+
+	return
 }

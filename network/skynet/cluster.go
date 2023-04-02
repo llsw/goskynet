@@ -5,6 +5,7 @@ import (
 	"encoding/binary"
 	"net"
 	"runtime"
+	"sync"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/app/server"
@@ -23,9 +24,20 @@ type ReqLargePkg struct {
 	Msgs []*MsgPart
 }
 
+type req struct {
+	ctx     context.Context
+	conn    network.Conn
+	cc      *ClusterConn
+	addr    interface{}
+	session uint32
+	data    *MsgPart
+	padding bool
+}
 type ClusterConn struct {
 	lastSession uint32
 	reqLargePkg map[uint32]*ReqLargePkg
+	once        sync.Once
+	reqChan     chan *req
 }
 
 type Cluster struct {
@@ -35,41 +47,38 @@ type Cluster struct {
 	transporter network.Transporter
 	conns       map[network.Conn]*ClusterConn
 	handler     ClusterMsgHandler
+	connLock    sync.Mutex
 }
 
 func genOpts(opts ...config.Option) *config.Options {
 	return config.NewOptions(opts)
 }
 
-func (c *Cluster) grabLargePkg(conn network.Conn,
-	session uint32, addr interface{}) (*ReqLargePkg, *ClusterConn) {
-	if ncl, ok := c.conns[conn]; ok {
-		if ncl.reqLargePkg == nil {
-			ncl.reqLargePkg = make(map[uint32]*ReqLargePkg)
-		}
-		if msgs, ok := ncl.reqLargePkg[session]; ok {
-			c.conns[conn].lastSession = session
-			return msgs, ncl
-		} else {
+func (c *Cluster) grabLargePkg(clusterConn *ClusterConn, conn network.Conn,
+	session uint32, addr interface{}) *ReqLargePkg {
+	if clusterConn == nil {
+		hlog.Debugf("clusterConn nil")
+		return nil
+	}
+
+	if clusterConn.reqLargePkg == nil {
+		hlog.Debugf("reqLargePkg nil")
+		return nil
+	}
+
+	if msgs, ok := clusterConn.reqLargePkg[session]; ok {
+		clusterConn.lastSession = session
+		return msgs
+	} else {
+		clusterConn.once.Do(func() {
 			// TODO 可以用对象池
-			c.conns[conn].reqLargePkg[session] = &ReqLargePkg{
+			clusterConn.reqLargePkg[session] = &ReqLargePkg{
 				Addr: addr,
 				Msgs: make([]*MsgPart, 0, 1),
 			}
-			c.conns[conn].lastSession = session
-			return c.conns[conn].reqLargePkg[session], c.conns[conn]
-		}
-	} else {
-		c.conns[conn] = &ClusterConn{
-			lastSession: 0,
-			reqLargePkg: make(map[uint32]*ReqLargePkg),
-		}
-		c.conns[conn].reqLargePkg[session] = &ReqLargePkg{
-			Addr: addr,
-			Msgs: make([]*MsgPart, 0, 1),
-		}
-		c.conns[conn].lastSession = session
-		return c.conns[conn].reqLargePkg[session], c.conns[conn]
+		})
+		clusterConn.lastSession = session
+		return clusterConn.reqLargePkg[session]
 	}
 }
 
@@ -148,32 +157,53 @@ func (c *Cluster) msg(ctx context.Context, conn network.Conn,
 	return
 }
 
-func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
+func (c *Cluster) dispatchReqOnce(req *req) {
+	reqLargePkg := c.grabLargePkg(req.cc, req.conn, req.session, req.addr)
+	if reqLargePkg == nil {
+		hlog.Debugf("dispatchReqOnce  reqLargePkg nil session%d", req.session)
+		return
+	}
+	req.cc.reqLargePkg[req.session].Msgs = append(reqLargePkg.Msgs, req.data)
+
+	if req.padding {
+		return
+	}
+	pkg := req.cc.reqLargePkg[req.session]
+	addr := pkg.Addr
+	msgs := pkg.Msgs
+	delete(req.cc.reqLargePkg, req.session)
+	c.msg(req.ctx, req.conn, addr, req.session, msgs)
+}
+
+func (c *Cluster) dispatchReq(reqChan chan *req) {
+	for r := range reqChan {
+		c.dispatchReqOnce(r)
+	}
+}
+
+func (c *Cluster) socket(clusterConn *ClusterConn, ctx context.Context, conn network.Conn) (err error) {
 	hlog.Debug("socket start")
-	var (
-		szh     []byte
-		buf     []byte
-		addr    interface{}
-		session uint32
-		data    *MsgPart
-		padding bool
-		skip    int
-		reqNum  int
-	)
 
 	defer func() {
 		if err != nil {
-			cconn := c.conns[conn]
-			if cconn != nil && cconn.reqLargePkg != nil {
-				delete(cconn.reqLargePkg, c.conns[conn].lastSession)
+			if clusterConn != nil && clusterConn.reqLargePkg != nil {
+				delete(clusterConn.reqLargePkg, clusterConn.lastSession)
 			}
 		}
 		conn.Release()
 	}()
 
-	reqNum = 0
-
+	reqNum := 0
 	for {
+		var (
+			szh     []byte
+			buf     []byte
+			skip    int
+			addr    interface{}
+			session uint32
+			data    *MsgPart
+			padding bool
+		)
 		skip = 2
 		conn.SetReadTimeout(20 * time.Second)
 		szh, err = conn.Peek(skip)
@@ -206,26 +236,20 @@ func (c *Cluster) socket(ctx context.Context, conn network.Conn) (err error) {
 		}
 		d := buf[2:isz]
 		addr, session, data, padding, err = UnpcakRequest(&d, uint32(sz))
-
 		if err != nil {
 			// conn.Skip(rl)
 			return
 		}
 
-		reqLargePkg, cconn := c.grabLargePkg(conn, session, addr)
-		cconn.reqLargePkg[session].Msgs = append(reqLargePkg.Msgs, data)
-
-		if padding {
-			// if rl <= isz {
-			// 	return
-			// }
-			continue
+		clusterConn.reqChan <- &req{
+			cc:      clusterConn,
+			ctx:     ctx,
+			conn:    conn,
+			addr:    addr,
+			session: session,
+			data:    data,
+			padding: padding,
 		}
-		pkg := cconn.reqLargePkg[session]
-		addr = pkg.Addr
-		msgs := pkg.Msgs
-		delete(cconn.reqLargePkg, session)
-		go c.msg(ctx, conn, addr, session, msgs)
 
 		// if rl <= isz {
 		// 	return
@@ -248,10 +272,12 @@ func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 	case network.Conn:
 		switch v := conn.(type) {
 		case *netpoll.Conn:
-			err = c.socket(ctx, v)
+			cc := c.initConn(conn)
+			err = c.socket(cc, ctx, v)
 		case *standard.Conn:
+			cc := c.initConn(conn)
 			for {
-				err = c.socket(ctx, v)
+				err = c.socket(cc, ctx, v)
 				if err != nil {
 					hlog.Errorf("on data err:%s\n", err.Error())
 				}
@@ -267,7 +293,6 @@ func (c *Cluster) onData(ctx context.Context, conn interface{}) (err error) {
 }
 
 func getRawConn(conn network.Conn) (rawnet.Conn, rawnet.Connection) {
-
 	switch v := conn.(type) {
 	case *standard.Conn:
 		return nil, nil
@@ -280,6 +305,24 @@ func getRawConn(conn network.Conn) (rawnet.Conn, rawnet.Connection) {
 	return nil, nil
 }
 
+func (c *Cluster) initConn(conn network.Conn) (cc *ClusterConn) {
+	c.connLock.Lock()
+	defer c.connLock.Unlock()
+	if clusterConn, ok := c.conns[conn]; ok {
+		cc = clusterConn
+	} else {
+		// TODO 可以用对象池
+		cc = &ClusterConn{
+			lastSession: 0,
+			reqLargePkg: make(map[uint32]*ReqLargePkg),
+			reqChan:     make(chan *req, 100),
+		}
+		c.conns[conn] = cc
+		go c.dispatchReq(cc.reqChan)
+	}
+	return cc
+}
+
 func (c *Cluster) newOpts() *config.Options {
 	// server.WithOnConnect 可以注册Connect回调
 	// server.WithOnAccept 可以注册Accept回调
@@ -288,10 +331,12 @@ func (c *Cluster) newOpts() *config.Options {
 		server.WithKeepAlive(true),
 		server.WithOnConnect(
 			func(ctx context.Context, conn network.Conn) context.Context {
+				c.initConn(conn)
 				rawConn, rwaConnection := getRawConn(conn)
 				if rwaConnection != nil {
 					rwaConnection.AddCloseCallback(
 						func(connection rawnet.Connection) error {
+							close(c.conns[conn].reqChan)
 							c.conns[conn] = nil
 							rawConn, _ := getRawConn(conn)
 							if rawConn != nil {
