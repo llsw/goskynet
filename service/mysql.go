@@ -71,7 +71,14 @@ func (act *MySQL) Call(curdName string,
 	res = make(share.ResChan)
 	var crud share.Act = func() (res *share.Res) {
 		if f, ok := act.curds[curdName]; ok {
-			res = f.Call(args...)
+			l := len(args) + 2
+			wrap := make([]interface{}, l)
+			wrap[0] = act.db
+			wrap[1] = act.sqlDb
+			for i := 2; i < l; i++ {
+				wrap[i] = args[i-2]
+			}
+			res = f.Call(wrap...)
 		} else {
 			res = &share.Res{}
 			res.Err = fmt.Errorf("curd:%s not found", curdName)
