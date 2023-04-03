@@ -77,5 +77,22 @@ gotool:
 	go fmt ${HELLO_SRC}
 	go vet ${HELLO_SRC}
 
+	go fmt ${CLUSTER1_SRC}
+	go vet ${CLUSTER1_SRC}
+
+	go fmt ${CLUSTER2_SRC}
+	go vet ${CLUSTER2_SRC}
+
+
+ifeq (run,$(firstword $(MAKECMDGOALS)))
+RUN_ARGS := $(wordlist 2,$(words $(MAKECMDGOALS)),$(MAKECMDGOALS))
+$(eval $ (RUN_ARGS):;@:)
+endif
+run: $(RUN_ARGS)
+
 clean:
 	@if [ -f ${HELLO_BINARY} ] ; then rm ${HELLO_BINARY} ; fi
+	
+# go install github.com/xxjwxc/gormt@master
+gorm:
+	gormt -H=127.0.0.1 --port=3306 -u=root -p=password -d=database -b=table -s=true -o ${MASTER_SRC}/lib/db/mysql/model
