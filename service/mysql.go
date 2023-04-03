@@ -67,9 +67,13 @@ func (act *MySQL) dispatch() {
 }
 
 func (act *MySQL) Call(curdName string,
-	args ...interface{}) (res share.ResChan) {
-	res = make(share.ResChan)
+	args ...interface{}) (resChan share.ResChan) {
+	resChan = make(share.ResChan)
 	var crud share.Act = func() (res *share.Res) {
+		defer utils.Recover(func(err error) {
+			done := &share.Res{Err: err}
+			resChan <- done
+		})
 		if f, ok := act.curds[curdName]; ok {
 			l := len(args) + 2
 			wrap := make([]interface{}, l)
@@ -80,14 +84,15 @@ func (act *MySQL) Call(curdName string,
 			}
 			res = f.Call(wrap...)
 		} else {
-			res = &share.Res{}
-			res.Err = fmt.Errorf("curd:%s not found", curdName)
+			res = &share.Res{
+				Err: fmt.Errorf("curd:%s not found", curdName),
+			}
 		}
 		return
 	}
 	action := &share.Req{
 		Act: crud,
-		Res: res,
+		Res: resChan,
 	}
 	act.req <- action
 

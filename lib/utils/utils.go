@@ -211,3 +211,19 @@ func Register(receiver interface{}) (methods map[string]*share.Method) {
 	}
 	return
 }
+
+func Recover(f func(error)) {
+	var err error
+	if e := recover(); e != nil {
+		switch v := e.(type) {
+		case error:
+			err = v
+		case string:
+			err = fmt.Errorf("%s", v)
+
+		}
+	}
+	if err != nil {
+		f(err)
+	}
+}
