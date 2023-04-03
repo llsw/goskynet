@@ -4,11 +4,13 @@ import (
 	"flag"
 	"fmt"
 	"os"
+	"reflect"
 	"runtime"
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	config "github.com/llsw/goskynet/lib/config"
+	share "github.com/llsw/goskynet/lib/share"
 )
 
 func GetClusterAddrByName(name string) (addr string, err error) {
@@ -193,4 +195,19 @@ func RunNumGoroutineMonitor() {
 		hlog.Debugf("groutine ->%d\n", runtime.NumGoroutine())
 		time.Sleep(60 * time.Second)
 	}
+}
+
+func Register(receiver interface{}) (methods map[string]*share.Method) {
+	typ := reflect.TypeOf(receiver)
+	rcvr := reflect.ValueOf(receiver)
+	methods = make(map[string]*share.Method)
+	for m := 0; m < typ.NumMethod(); m++ {
+		method := typ.Method(m)
+		meth := &share.Method{
+			Rcvr:   rcvr,
+			Method: method,
+		}
+		methods[method.Name] = meth
+	}
+	return
 }

@@ -9,20 +9,22 @@ import (
 	cv "github.com/llsw/goskynet/lib/const"
 	log "github.com/llsw/goskynet/lib/log"
 	"github.com/llsw/goskynet/lib/utils"
-	skynet "github.com/llsw/goskynet/network/skynet"
+	skynetCore "github.com/llsw/goskynet/network/skynet"
 )
+
+var skynet = GetInstance()
 
 type (
 	Cluster struct {
 		name   string
 		addr   string
-		worker *skynet.Cluster
+		worker *skynetCore.Cluster
 	}
 )
 
 // ===必须实现===
 func (c *Cluster) Init(name string, pid *actor.PID) (err error) {
-	worker, err := skynet.NewCluster(c.name, c.addr, c.onData)
+	worker, err := skynetCore.NewCluster(c.name, c.addr, c.onData)
 	if err != nil {
 		hlog.Errorf("start cluster:%s error:%s", name, err.Error())
 		return
@@ -123,7 +125,7 @@ func Send(req ...interface{}) (err error) {
 
 // ===自定义消息处理方法===
 
-func Open(configPath string) (c *skynet.Cluster, close func(), err error) {
+func Open(configPath string) (c *skynetCore.Cluster, close func(), err error) {
 	err = config.LoadClusterConfig(configPath)
 	if err != nil {
 		hlog.Errorf("load cluster config error:%s", err.Error())
@@ -163,7 +165,7 @@ func Open(configPath string) (c *skynet.Cluster, close func(), err error) {
 	return
 }
 
-func StartCluster(path string) (c *skynet.Cluster, close func()) {
+func StartCluster(path string) (c *skynetCore.Cluster, close func()) {
 	go utils.RunNumGoroutineMonitor()
 	c, close, err := Open(path)
 	if err != nil {
