@@ -92,7 +92,7 @@ func Recover(f func(error)) {
 }
 
 func (g *GroutinePool) take() {
-	g.jobChan <- true
+	g.jobChan <- false
 }
 
 func (g *GroutinePool) recycle() {
@@ -109,13 +109,15 @@ func (g *GroutinePool) Job(
 		lock := new(sync.Mutex)
 		done := false
 		finish := func(err error) {
-			lock.Lock()
-			defer lock.Unlock()
 			if !done {
-				done = true
-				g.recycle()
-				if err != nil {
-					jobError(err, args...)
+				lock.Lock()
+				defer lock.Unlock()
+				if !done {
+					done = true
+					g.recycle()
+					if err != nil {
+						jobError(err, args...)
+					}
 				}
 			}
 		}
