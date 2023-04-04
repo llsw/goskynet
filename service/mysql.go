@@ -39,6 +39,7 @@ type (
 		cruds map[string]map[string]*share.Method
 		gp    *share.GroutinePool
 	}
+	MySQLCrud func(db *gorm.DB, sqlDb *sql.DB, args ...interface{}) *share.Res
 )
 
 // ===必须实现===
@@ -56,12 +57,6 @@ func (act *MySQL) Stop(name string, pid *actor.PID) (err error) {
 // ===必须实现===
 
 // ===自定义消息处理方法===
-type User struct {
-	ID       int
-	Code     int
-	UserName string
-	NickName string
-}
 
 func (act *MySQL) dispatch() {
 	for a := range act.req {
@@ -99,8 +94,8 @@ func (act *MySQL) Call(dao string, crud string,
 	resChan = make(share.ResChan)
 	var cb share.Act = func() (res *share.Res) {
 		defer utils.Recover(func(err error) {
-			done := &share.Res{Err: err}
-			resChan <- done
+			res := &share.Res{Err: err}
+			resChan <- res
 		})
 		if d, ok := act.cruds[dao]; ok {
 			if f, ok := d[crud]; ok {
