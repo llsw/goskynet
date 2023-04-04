@@ -139,7 +139,7 @@ func (act *Redis) Open() {
 func openRedis(conf *RedisConf) (db *redis.Client) {
 	var err error
 	db = redis.NewClient(&redis.Options{
-		Addr:         "localhost:6379",
+		Addr:         fmt.Sprintf("%s:%d", conf.Host, conf.Port),
 		Password:     conf.Auth, // 没有密码，默认值
 		DB:           conf.Db,   // 默认DB 0
 		MinIdleConns: runtime.NumCPU(),
