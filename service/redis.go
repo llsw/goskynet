@@ -168,7 +168,7 @@ func NewRedisService(svcName string, conf *RedisConf, receiver ...interface{}) {
 		for _, v := range receiver {
 			val := reflect.Indirect(reflect.ValueOf(v))
 			dao := val.Type().Name()
-			cruds[dao] = utils.Register(receiver)
+			cruds[dao] = utils.Register(v)
 		}
 
 		svc := &Redis{

@@ -184,7 +184,7 @@ func NewMySQLService(svcName string, conf *MySQLConf, receiver ...interface{}) {
 		for _, v := range receiver {
 			val := reflect.Indirect(reflect.ValueOf(v))
 			dao := val.Type().Name()
-			cruds[dao] = utils.Register(receiver)
+			cruds[dao] = utils.Register(v)
 		}
 
 		svc := &MySQL{
