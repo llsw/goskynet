@@ -208,6 +208,7 @@ func Register(receiver interface{}) (methods map[string]*share.Method) {
 			Method: method,
 		}
 		methods[method.Name] = meth
+		hlog.Debugf("method.Name:%s", method.Name)
 	}
 	return
 }

@@ -153,9 +153,10 @@ func openRedis(conf *RedisConf) (db *redis.Client) {
 	})
 
 	if err != nil {
-		hlog.Fatalf("mysql init failed, err: ", err)
+		hlog.Fatalf("redis init failed, err: ", err)
 		return
 	}
+	hlog.Info("redis init ok")
 	return
 }
 
