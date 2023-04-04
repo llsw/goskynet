@@ -37,8 +37,6 @@ type (
 
 func (m *Method) Call(args ...interface{}) (res *Res) {
 	res = &Res{}
-	var err error
-	var data interface{}
 	defer func() {
 		if e := recover(); e != nil {
 			switch v := e.(type) {
