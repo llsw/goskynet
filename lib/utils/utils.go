@@ -220,7 +220,6 @@ func Recover(f func(error)) {
 			err = v
 		case string:
 			err = fmt.Errorf("%s", v)
-
 		}
 	}
 	if err != nil {

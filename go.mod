@@ -7,6 +7,7 @@ require (
 	github.com/cloudwego/hertz v0.6.0
 	github.com/gin-contrib/pprof v1.4.0
 	github.com/go-sql-driver/mysql v1.7.0
+	github.com/pkg/errors v0.9.1
 	gorm.io/driver/mysql v1.4.7
 	gorm.io/gorm v1.24.6
 )

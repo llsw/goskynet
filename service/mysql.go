@@ -3,6 +3,7 @@ package actor
 import (
 	"database/sql"
 	"fmt"
+	"reflect"
 	"time"
 
 	"github.com/asynkron/protoactor-go/actor"
@@ -10,6 +11,7 @@ import (
 	_ "github.com/go-sql-driver/mysql"
 	share "github.com/llsw/goskynet/lib/share"
 	utils "github.com/llsw/goskynet/lib/utils"
+	"github.com/pkg/errors"
 	"gorm.io/driver/mysql"
 	"gorm.io/gorm"
 )
@@ -26,6 +28,7 @@ type (
 		MaxLifetime  int    `yaml:"maxLifetime"`  // mysql timeout 单位分钟，要小于mysql设置的time_out
 		ReplicaSet   int    `yaml:"replicaSet"`   // 副本数，一个db开多少个service
 		Parallel     int    `yaml:"parallel"`     // 每个service同时执行多少个sql
+		SqlTimeout   int    `yaml:"sqlTimeout"`   // sql执行超时，单位秒
 	}
 
 	MySQL struct {
@@ -33,7 +36,8 @@ type (
 		sqlDb *sql.DB
 		req   share.ReqChan
 		conf  *MySQLConf
-		curds map[string]*share.Method
+		cruds map[string]map[string]*share.Method
+		gp    *share.GroutinePool
 	}
 )
 
@@ -61,50 +65,70 @@ type User struct {
 
 func (act *MySQL) dispatch() {
 	for a := range act.req {
-		res := a.Act()
-		a.Res <- res
+		// 设置执行超时要换成goroutine,
+		// 如果并发很高的话groutine太多
+		// 可以使用goroutine对象池
+		// 在池子里面获取到goroutine再开启goroutine
+		// 这样能防止高并发下groutine暴涨
+		act.gp.Job(act.conf.SqlTimeout, func(args ...interface{}) {
+			a := args[0].(*share.Req)
+			a.Res <- a.Act()
+		}, func(err error, args ...interface{}) {
+			a := args[0].(*share.Req)
+			a.Res <- &share.Res{
+				Err: errors.Wrap(err, "crud error"),
+			}
+		}, a)
 	}
 }
 
-func (act *MySQL) Call(curdName string,
+// func (act *MySQL) Demo() {
+// u := model.User{}
+// filds := []string{"ID", "code", "userName", "nickName"}
+// // 这种方式会报错sql: expected 0 arguments, go 3
+// // Select("ID", "code", "userName", "nickName")
+// if err := act.db.Select(filds).Take(&u).Error; err != nil {
+// 	hlog.Errorf("call ")
+// 	return
+// }
+// hlog.Debugf("user:%v", &u)
+// }
+
+func (act *MySQL) Call(dao string, crud string,
 	args ...interface{}) (resChan share.ResChan) {
 	resChan = make(share.ResChan)
-	var crud share.Act = func() (res *share.Res) {
+	var cb share.Act = func() (res *share.Res) {
 		defer utils.Recover(func(err error) {
 			done := &share.Res{Err: err}
 			resChan <- done
 		})
-		if f, ok := act.curds[curdName]; ok {
-			l := len(args) + 2
-			wrap := make([]interface{}, l)
-			wrap[0] = act.db
-			wrap[1] = act.sqlDb
-			for i := 2; i < l; i++ {
-				wrap[i] = args[i-2]
+		if d, ok := act.cruds[dao]; ok {
+			if f, ok := d[crud]; ok {
+				l := len(args) + 2
+				wrap := make([]interface{}, l)
+				wrap[0] = act.db
+				wrap[1] = act.sqlDb
+				for i := 2; i < l; i++ {
+					wrap[i] = args[i-2]
+				}
+				res = f.Call(wrap...)
+			} else {
+				res = &share.Res{
+					Err: fmt.Errorf("crud:%s not found", crud),
+				}
 			}
-			res = f.Call(wrap...)
 		} else {
 			res = &share.Res{
-				Err: fmt.Errorf("curd:%s not found", curdName),
+				Err: fmt.Errorf("dao:%s not found", dao),
 			}
 		}
 		return
 	}
 	action := &share.Req{
-		Act: crud,
+		Act: cb,
 		Res: resChan,
 	}
 	act.req <- action
-
-	// u := model.User{}
-	// filds := []string{"ID", "code", "userName", "nickName"}
-	// // 这种方式会报错sql: expected 0 arguments, go 3
-	// // Select("ID", "code", "userName", "nickName")
-	// if err := act.db.Select(filds).Take(&u).Error; err != nil {
-	// 	hlog.Errorf("call ")
-	// 	return
-	// }
-	// hlog.Debugf("user:%v", &u)
 	return
 }
 
@@ -152,15 +176,24 @@ func open(conf *MySQLConf) (db *gorm.DB, sqlDb *sql.DB) {
 	return
 }
 
-func NewMySQLService(svcName string, conf *MySQLConf, receiver interface{}) {
+func NewMySQLService(svcName string, conf *MySQLConf, receiver ...interface{}) {
 	for i := 0; i < conf.ReplicaSet; i++ {
 		db, sqlDb := open(conf)
+		cruds := make(map[string]map[string]*share.Method)
+
+		for _, v := range receiver {
+			val := reflect.Indirect(reflect.ValueOf(v))
+			dao := val.Type().Name()
+			cruds[dao] = utils.Register(receiver)
+		}
+
 		svc := &MySQL{
 			db:    db,
 			sqlDb: sqlDb,
 			conf:  conf,
 			req:   make(share.ReqChan, conf.Parallel),
-			curds: utils.Register(receiver),
+			cruds: cruds,
+			gp:    share.GreateGroutinePool(10),
 		}
 		skynet.NewService(svcName, svc)
 	}

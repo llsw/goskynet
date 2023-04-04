@@ -3,6 +3,8 @@ package share
 import (
 	"fmt"
 	"reflect"
+	"sync"
+	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 )
@@ -26,6 +28,11 @@ type (
 		Res ResChan
 	}
 	ReqChan chan *Req
+
+	GroutinePool struct {
+		Parallel int
+		jobChan  chan bool
+	}
 )
 
 func (m *Method) Call(args ...interface{}) (res *Res) {
@@ -67,4 +74,70 @@ func (m *Method) Call(args ...interface{}) (res *Res) {
 	res.Data = data
 	res.Err = err
 	return
+}
+
+func Recover(f func(error)) {
+	var err error
+	if e := recover(); e != nil {
+		switch v := e.(type) {
+		case error:
+			err = v
+		case string:
+			err = fmt.Errorf("%s", v)
+		}
+	}
+	if err != nil {
+		f(err)
+	}
+}
+
+func (g *GroutinePool) take() {
+	g.jobChan <- true
+}
+
+func (g *GroutinePool) recycle() {
+	<-g.jobChan
+}
+
+func (g *GroutinePool) Job(
+	timeout int,
+	job func(args ...interface{}),
+	jobError func(err error, args ...interface{}), args ...interface{}) {
+
+	g.take()
+	go func() {
+		lock := new(sync.Mutex)
+		done := false
+		finish := func(err error) {
+			lock.Lock()
+			defer lock.Unlock()
+			if !done {
+				done = true
+				g.recycle()
+				if err != nil {
+					jobError(err, args...)
+				}
+			}
+		}
+		defer Recover(
+			func(err error) {
+				finish(err)
+			},
+		)
+		time.AfterFunc((time.Duration(timeout) * time.Second),
+			func() {
+				finish(fmt.Errorf("job timeout"))
+			},
+		)
+		job(args...)
+		finish(nil)
+	}()
+}
+
+func GreateGroutinePool(parallel int) *GroutinePool {
+	g := &GroutinePool{
+		Parallel: parallel,
+		jobChan:  make(chan bool, parallel),
+	}
+	return g
 }
