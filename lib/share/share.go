@@ -69,10 +69,7 @@ func (m *Method) Call(args ...interface{}) (res *Res) {
 		in[i] = reflect.ValueOf(args[i-1])
 	}
 	temp := m.Method.Func.Call(in)
-	data = temp[0].Interface()
-	err = temp[1].Interface().(error)
-	res.Data = data
-	res.Err = err
+	res = temp[0].Interface().(*Res)
 	return
 }
 
