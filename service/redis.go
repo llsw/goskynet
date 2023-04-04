@@ -64,6 +64,7 @@ func (act *Redis) Init(name string, pid *actor.PID) (err error) {
 }
 
 func (act *Redis) Start(name string, pid *actor.PID) {
+	act.Open()
 }
 
 func (act *Redis) Stop(name string, pid *actor.PID) (err error) {

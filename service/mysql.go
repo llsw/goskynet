@@ -48,6 +48,7 @@ func (act *MySQL) Init(name string, pid *actor.PID) (err error) {
 }
 
 func (act *MySQL) Start(name string, pid *actor.PID) {
+	act.Open()
 }
 
 func (act *MySQL) Stop(name string, pid *actor.PID) (err error) {
