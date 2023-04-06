@@ -451,17 +451,18 @@ func Receive(ctx actor.Context) {
 }
 
 func CallDb(db string, dao string, crud string,
-	args ...interface{}) (res *share.Res) {
-	defer utils.Recover(func(err error) {
-		res = &share.Res{Err: err}
+	args ...interface{}) (res interface{}, err error) {
+	defer utils.Recover(func(e error) {
+		err = e
 	})
 	args = utils.WrapInterface(dao, crud, args)
 	data, err := skynet.Call(db, "Call", args...)
 	if err != nil {
-		res = &share.Res{Err: err}
 		return
 	}
 	ch := data.([]interface{})[0].(share.ResChan)
-	res = <-ch
+	r := <-ch
+	res = r.Data
+	err = r.Err
 	return
 }
