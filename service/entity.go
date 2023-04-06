@@ -3,6 +3,7 @@ package actor
 import (
 	"encoding/json"
 	"fmt"
+	"sync"
 
 	cv "github.com/llsw/goskynet/lib/const"
 
@@ -11,11 +12,12 @@ import (
 
 type (
 	Data struct {
-		Key     string      `json:"key"`
-		Value   interface{} `json:"value"`
-		Created int64       `json:"created"` // 创建时间
-		Updated int64       `json:"updated"` // 更新时间
-		TTL     int64       `json:"ttl"`     // 过期时间单位毫秒
+		Key     string       `json:"key"`
+		Value   interface{}  `json:"value"`
+		Created int64        `json:"created"` // 创建时间
+		Updated int64        `json:"updated"` // 更新时间
+		TTL     int64        `json:"ttl"`     // 过期时间单位毫秒
+		Lock    sync.RWMutex `son:"-"`
 	}
 
 	Timer struct {
@@ -64,6 +66,11 @@ func (ins *entity) dispatchExipre() {
 	// TODO 使用时间轮过期数据
 }
 
+// 创建数据
+func (ins *entity) CreateData(data *Data) {
+	// TODO创建数据
+}
+
 //  获取数据
 func (ins *entity) GetData(key string) {
 	// TODO 获取数据
@@ -75,7 +82,7 @@ func (ins *entity) SetData(data *Data) {
 }
 
 // 创建定时器
-func (ins *entity) SetTimer(timer *Timer) {
+func (ins *entity) CreateTimer(timer *Timer) {
 	// TODO 创建定时器
 }
 
