@@ -15,6 +15,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/network/netpoll"
 	"github.com/cloudwego/hertz/pkg/network/standard"
 	rawnet "github.com/cloudwego/netpoll"
+	utils "github.com/llsw/goskynet/lib/utils"
 )
 
 type ClusterMsgHandler func(addr interface{}, session uint32, args ...interface{})
@@ -36,8 +37,8 @@ type req struct {
 type ClusterConn struct {
 	lastSession uint32
 	reqLargePkg map[uint32]*ReqLargePkg
-	once        sync.Once
 	reqChan     chan *req
+	wirteLock   sync.Mutex
 }
 
 type Cluster struct {
@@ -116,15 +117,43 @@ func defalutHandler(addr interface{}, session uint32, args ...interface{}) {
 	cb(resps, nil)
 }
 
-func (c *Cluster) msg(ctx context.Context, conn network.Conn,
-	addr interface{}, session uint32, msgs []*MsgPart) {
+func (c *Cluster) response(cc *ClusterConn,
+	conn network.Conn, msgs []*MsgPart) (err error) {
+	cc.wirteLock.Lock()
+	done := false
+	finish := func() {
+		if !done {
+			done = true
+			cc.wirteLock.Unlock()
+		}
+	}
+	defer finish()
+	defer utils.Recover(func(err error) {
+		finish()
+	})
 
+	for _, v := range msgs {
+		_, err = conn.WriteBinary(*v.Msg)
+		if err != nil {
+			return
+		}
+	}
+	// TODO 是否做成定时flush
+	// 要flush才会把包发出去
+	err = conn.Flush()
+	return
+}
+
+func (c *Cluster) msg(cc *ClusterConn, ctx context.Context, conn network.Conn,
+	addr interface{}, session uint32, msgs []*MsgPart) {
+	defer utils.Recover(func(err error) {})
 	msg, sz, err := Concat(msgs)
 	ok := true
 	var msgsz int
 	var resps []interface{}
 
 	cb := func(resps []interface{}, err error) {
+		defer utils.Recover(func(err error) {})
 		if err != nil {
 			ok = false
 			resps = []interface{}{err.Error()}
@@ -138,19 +167,15 @@ func (c *Cluster) msg(ctx context.Context, conn network.Conn,
 
 		msgs, err = PackResponse(session, ok, msg, uint32(msgsz))
 		if err != nil {
-			hlog.Errorf("pack response msg error:%s resps:%v", err.Error(), resps)
+			hlog.Errorf(
+				"pack response msg error:%s resps:%v", err.Error(), resps)
 			return
 		}
-		for _, v := range msgs {
-			_, err = conn.WriteBinary(*v.Msg)
-			if err != nil {
-				return
-			}
-		}
-		// 要flush才会把包发出去
-		err = conn.Flush()
+
+		err = c.response(cc, conn, msgs)
 		if err != nil {
-			return
+			hlog.Errorf(
+				"write response msg error:%s resps:%v", err.Error(), resps)
 		}
 	}
 
@@ -183,7 +208,7 @@ func (c *Cluster) dispatchReqOnce(req *req) {
 	msgs := pkg.Msgs
 	delete(req.cc.reqLargePkg, req.session)
 	// hlog.Debugf("delete session%d addr:%s", req.session, req.conn.RemoteAddr())
-	c.msg(req.ctx, req.conn, addr, req.session, msgs)
+	c.msg(req.cc, req.ctx, req.conn, addr, req.session, msgs)
 }
 
 func (c *Cluster) dispatchReq(reqChan chan *req) {
@@ -193,18 +218,14 @@ func (c *Cluster) dispatchReq(reqChan chan *req) {
 	hlog.Debugf("dispatch req loop end")
 }
 
-func (c *Cluster) socket(clusterConn *ClusterConn, ctx context.Context, conn network.Conn) (err error) {
-	// hlog.Debug("socket start")
-
-	defer func() {
-		if err != nil {
-			if clusterConn != nil && clusterConn.reqLargePkg != nil {
-				delete(clusterConn.reqLargePkg, clusterConn.lastSession)
-			}
+func (c *Cluster) socket(clusterConn *ClusterConn,
+	ctx context.Context, conn network.Conn) (err error) {
+	defer utils.Recover(func(err error) {
+		if clusterConn != nil && clusterConn.reqLargePkg != nil {
+			delete(clusterConn.reqLargePkg, clusterConn.lastSession)
 		}
-		conn.Release()
-	}()
-
+	})
+	defer conn.Release()
 	reqNum := 0
 	for {
 		var (
@@ -374,9 +395,9 @@ func (c *Cluster) newOpts() *config.Options {
 							return nil
 						})
 				}
-				if rawConn != nil {
-					// hlog.Debugf("on connect fd:%d", rawConn.Fd())
-				}
+				// if rawConn != nil {
+				// 	// hlog.Debugf("on connect fd:%d", rawConn.Fd())
+				// }
 				return ctx
 			}),
 		server.WithOnAccept(func(conn net.Conn) context.Context {

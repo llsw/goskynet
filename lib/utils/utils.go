@@ -11,6 +11,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	config "github.com/llsw/goskynet/lib/config"
 	share "github.com/llsw/goskynet/lib/share"
+	"github.com/pkg/errors"
 )
 
 func GetClusterAddrByName(name string) (addr string, err error) {
@@ -224,6 +225,8 @@ func Recover(f func(error)) {
 		}
 	}
 	if err != nil {
+		err = errors.Wrap(err, "recover error")
+		hlog.Error(err.Error())
 		f(err)
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/pkg/errors"
 )
 
 type (
@@ -37,18 +38,9 @@ type (
 
 func (m *Method) Call(args ...interface{}) (res *Res) {
 	res = &Res{}
-	defer func() {
-		if e := recover(); e != nil {
-			switch v := e.(type) {
-			case error:
-				res.Err = v
-			case string:
-				res.Err = fmt.Errorf("%s", v)
-
-			}
-			hlog.Debugf("call method args:%v err %s ", args, res.Err.Error())
-		}
-	}()
+	defer Recover(func(err error) {
+		res.Err = err
+	})
 	actually := len(args)
 
 	num := m.Method.Type.NumIn()
@@ -56,11 +48,15 @@ func (m *Method) Call(args ...interface{}) (res *Res) {
 	in[0] = m.Rcvr
 
 	if actually < num-1 {
-		res.Err = fmt.Errorf(
+		hlog.Debugf(
 			"call method:%s error: args number need:%d actually:%d %v",
 			m.Method.Name, num-1, actually, args,
 		)
-		return
+		// res.Err = fmt.Errorf(
+		// 	"call method:%s error: args number need:%d actually:%d %v",
+		// 	m.Method.Name, num-1, actually, args,
+		// )
+		// return
 	}
 
 	for i := 1; i < actually+1; i++ {
@@ -82,6 +78,8 @@ func Recover(f func(error)) {
 		}
 	}
 	if err != nil {
+		err = errors.Wrap(err, "recover error")
+		hlog.Error(err.Error())
 		f(err)
 	}
 }

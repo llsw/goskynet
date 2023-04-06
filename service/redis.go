@@ -77,18 +77,15 @@ func (act *Redis) Stop(name string, pid *actor.PID) (err error) {
 
 func (act *Redis) dispatch() {
 	for a := range act.req {
-		hlog.Debugf("mysql dispatch1")
 		// 设置执行超时要换成goroutine,
 		// 如果并发很高的话groutine太多
 		// 可以使用goroutine对象池
 		// 在池子里面获取到goroutine再开启goroutine
 		// 这样能防止高并发下groutine暴涨
 		act.gp.Job(0, func(args ...interface{}) {
-			hlog.Debugf("mysql dispatch2")
 			a := args[0].(*share.Req)
 			a.Res <- a.Act()
 		}, func(err error, args ...interface{}) {
-			hlog.Debugf("mysql dispatch")
 			a := args[0].(*share.Req)
 			a.Res <- &share.Res{
 				Err: errors.Wrap(err, "crud error"),
@@ -100,11 +97,9 @@ func (act *Redis) dispatch() {
 func (act *Redis) Call(dao string, crud string,
 	args ...interface{}) (resChan share.ResChan) {
 	resChan = make(share.ResChan)
-	hlog.Debugf("redis call dao:%s crud:%s", dao, crud)
 	var cb share.Act = func() (res *share.Res) {
 		defer utils.Recover(func(err error) {
 			res = &share.Res{Err: err}
-			// resChan <- res
 		})
 		if d, ok := act.cruds[dao]; ok {
 			if f, ok := d[crud]; ok {
