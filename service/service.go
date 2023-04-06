@@ -8,7 +8,8 @@ import (
 
 	"github.com/asynkron/protoactor-go/actor"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
-	"github.com/llsw/goskynet/lib/utils"
+	share "github.com/llsw/goskynet/lib/share"
+	utils "github.com/llsw/goskynet/lib/utils"
 )
 
 var onceIns sync.Once
@@ -447,4 +448,20 @@ func Receive(ctx actor.Context) {
 			}
 		}
 	}
+}
+
+func CallDb(db string, dao string, crud string,
+	args ...interface{}) (res *share.Res) {
+	defer utils.Recover(func(err error) {
+		res = &share.Res{Err: err}
+	})
+	args = utils.WrapInterface(dao, crud, args)
+	data, err := skynet.Call(db, "Call", args...)
+	if err != nil {
+		res = &share.Res{Err: err}
+		return
+	}
+	ch := data.([]interface{})[0].(share.ResChan)
+	res = <-ch
+	return
 }

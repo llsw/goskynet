@@ -230,3 +230,14 @@ func Recover(f func(error)) {
 		f(err)
 	}
 }
+
+func WrapInterface(args ...interface{}) []interface{} {
+	l := len(args)
+	if l > 2 {
+		switch v := args[l-1].(type) {
+		case []interface{}:
+			args = append(args[0:l-1], v...)
+		}
+	}
+	return args
+}
