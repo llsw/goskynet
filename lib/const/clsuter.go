@@ -7,6 +7,7 @@ type cluster struct {
 type service struct {
 	CLUSTER string
 	PPROF   string
+	ENTITY  string
 }
 
 var CLUSTER = &cluster{
@@ -16,4 +17,5 @@ var CLUSTER = &cluster{
 var SERVICE = &service{
 	CLUSTER: "cluster",
 	PPROF:   "pprof",
+	ENTITY:  "entity", // 只有数据，没有逻辑
 }
