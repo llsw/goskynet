@@ -8,6 +8,7 @@ import (
 
 	"github.com/asynkron/protoactor-go/actor"
 	"github.com/cloudwego/hertz/pkg/common/hlog"
+	"github.com/llsw/goskynet/lib/utils"
 )
 
 var onceIns sync.Once
@@ -20,31 +21,12 @@ type Method struct {
 }
 
 func (m *Method) call(req ...interface{}) (resp []interface{}, err error) {
-	defer func() {
-		if e := recover(); e != nil {
-			switch v := e.(type) {
-			case error:
-				err = v
-			case string:
-				err = fmt.Errorf("%s", v)
-
-			}
-			hlog.Debugf("call req:%v err %s ", req, err.Error())
-		}
-	}()
+	defer utils.Recover(func(err error) {
+		hlog.Debugf("call req:%v err %s ", req, err.Error())
+	})
 	actually := len(req)
-
-	// num := m.method.Type.NumIn()
 	in := make([]reflect.Value, actually+1)
 	in[0] = m.rcvr
-
-	// if actually < num-1 {
-	// 	err = fmt.Errorf(
-	// 		"call method:%s error: args number need:%d actually:%d %v",
-	// 		m.method.Name, num-1, len(req), req,
-	// 	)
-	// 	return
-	// }
 
 	for i := 1; i < actually+1; i++ {
 		in[i] = reflect.ValueOf(req[i-1])
