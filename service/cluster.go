@@ -196,7 +196,7 @@ func startCluster(path string) (c *skynetCore.Cluster, close func()) {
 	return
 }
 
-func StartCluser(version string, start func(), test func()) {
+func StartCluster(version string, start func(), test func()) {
 	path := utils.GetConifgPath(version)
 	c, close := startCluster(path)
 	defer close()

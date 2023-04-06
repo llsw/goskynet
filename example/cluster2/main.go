@@ -10,15 +10,11 @@ import (
 )
 
 func main() {
-	path := utils.GetConifgPath("v0.1.2")
-	c, close := cluster.StartCluster(path)
-	defer func() {
-		close()
-	}()
+	cluster.StartCluster("v0.1.2", func() {
+		utils.DelayFunc(3, test)
+	}, func() {
 
-	utils.DelayFunc(3, test)
-
-	hlog.Fatal(c.ListenAndServe())
+	})
 }
 
 func callIkun(wg *sync.WaitGroup, index int) {
