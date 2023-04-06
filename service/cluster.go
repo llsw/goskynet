@@ -165,7 +165,7 @@ func Open(configPath string) (c *skynetCore.Cluster, close func(), err error) {
 	return
 }
 
-func StartCluster(path string) (c *skynetCore.Cluster, close func()) {
+func startCluster(path string) (c *skynetCore.Cluster, close func()) {
 	go utils.RunNumGoroutineMonitor()
 	c, close, err := Open(path)
 	if err != nil {
@@ -194,4 +194,15 @@ func StartCluster(path string) (c *skynetCore.Cluster, close func()) {
 	}
 
 	return
+}
+
+func StartCluser(version string, start func(), test func()) {
+	path := utils.GetConifgPath(version)
+	c, close := startCluster(path)
+	defer close()
+	go func() {
+		start()
+		test()
+	}()
+	hlog.Fatal(c.ListenAndServe())
 }
