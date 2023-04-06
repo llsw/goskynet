@@ -34,17 +34,17 @@ func (m *Method) call(req ...interface{}) (resp []interface{}, err error) {
 	}()
 	actually := len(req)
 
-	num := m.method.Type.NumIn()
+	// num := m.method.Type.NumIn()
 	in := make([]reflect.Value, actually+1)
 	in[0] = m.rcvr
 
-	if actually < num-1 {
-		err = fmt.Errorf(
-			"call method:%s error: args number need:%d actually:%d %v",
-			m.method.Name, num-1, len(req), req,
-		)
-		return
-	}
+	// if actually < num-1 {
+	// 	err = fmt.Errorf(
+	// 		"call method:%s error: args number need:%d actually:%d %v",
+	// 		m.method.Name, num-1, len(req), req,
+	// 	)
+	// 	return
+	// }
 
 	for i := 1; i < actually+1; i++ {
 		in[i] = reflect.ValueOf(req[i-1])
