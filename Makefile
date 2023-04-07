@@ -43,7 +43,6 @@ else
 	${CLUSTER2_BINARY} -c ${CLUSTER2_SRC}/config.yaml
 endif
 
-
 cluster1:
 ifeq ($(OS),Windows_NT)
 
@@ -95,4 +94,11 @@ clean:
 	
 # go install github.com/xxjwxc/gormt@master
 gorm:
-	gormt -H=127.0.0.1 --port=3306 -u=root -p=password -d=database -b=table -s=true -o ${MASTER_SRC}/lib/db/mysql/model
+	gormt -H=127.0.0.1 --port=3306 -u=root -p=password \
+	-d=database -b=table -s=true -o ${MASTER_SRC}/lib/db/mysql/model
+
+tidy:
+	go mod tidy
+
+modclean:
+	go clean -modcache
