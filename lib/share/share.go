@@ -106,8 +106,9 @@ func (g *GroutinePool) Job(
 				finish(err)
 			},
 		)
+		var ti *time.Timer
 		if timeout > 0 {
-			time.AfterFunc((time.Duration(timeout) * time.Second),
+			ti = time.AfterFunc((time.Duration(timeout) * time.Second),
 				func() {
 					finish(fmt.Errorf("job timeout"))
 				},
@@ -115,6 +116,11 @@ func (g *GroutinePool) Job(
 		}
 
 		job(args...)
+		if ti != nil {
+			if !ti.Stop() {
+				<-ti.C
+			}
+		}
 		finish(nil)
 	}()
 }

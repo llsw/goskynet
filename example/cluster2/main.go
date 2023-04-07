@@ -5,13 +5,13 @@ import (
 	"time"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
-	utils "github.com/llsw/goskynet/lib/utils"
 	cluster "github.com/llsw/goskynet/service"
 )
 
 func main() {
 	cluster.StartCluster("v0.1.2", func() {
-		utils.DelayFunc(3, test)
+		time.AfterFunc(3*time.Second, test)
+		time.AfterFunc(30*time.Second, test)
 	}, func() {
 
 	})
