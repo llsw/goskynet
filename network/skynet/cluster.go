@@ -39,7 +39,14 @@ type ClusterConn struct {
 	reqLargePkg map[uint32]*ReqLargePkg
 	reqChan     chan *req
 	wirteLock   sync.Mutex
+	fd          int
 }
+
+type OnConnect func(fd int)
+type OnAccept func(fd int)
+type OnClose func(fd int)
+type OnMsg func(fd int, data interface{}, err error)
+type OnUnpack func(fd int, msg []byte, sz int) (data interface{}, err error)
 
 type Cluster struct {
 	name        string
@@ -50,6 +57,11 @@ type Cluster struct {
 	handler     ClusterMsgHandler
 	connLock    sync.Mutex
 	countLock   sync.Mutex
+	onConnect   OnConnect
+	onAccept    OnAccept
+	onClose     OnClose
+	onMsg       OnMsg
+	onUnpack    OnUnpack
 }
 
 func genOpts(opts ...config.Option) *config.Options {
@@ -238,7 +250,6 @@ func (c *Cluster) socket(clusterConn *ClusterConn,
 			padding bool
 		)
 		skip = 2
-		conn.SetReadTimeout(20 * time.Second)
 		szh, err = conn.Peek(skip)
 		if err != nil {
 			return
@@ -268,6 +279,15 @@ func (c *Cluster) socket(clusterConn *ClusterConn,
 			return
 		}
 		d := buf[2:isz]
+
+		if c.onUnpack != nil {
+			// TODO 自定义unpack
+			// data, err := c.onUnpack(clusterConn.fd, d, isz-2)
+			continue
+		}
+
+		// TODO 默认unpack
+
 		addr, session, data, padding, err = UnpcakRequest(&d, uint32(sz))
 		if err != nil {
 			// conn.Skip(rl)
@@ -362,6 +382,7 @@ func (c *Cluster) initConn(fd int) (cc *ClusterConn) {
 			lastSession: 0,
 			reqLargePkg: make(map[uint32]*ReqLargePkg),
 			reqChan:     make(chan *req, 500),
+			fd:          fd,
 		}
 		c.conns[fd] = cc
 		go c.dispatchReq(cc.reqChan)
@@ -376,6 +397,8 @@ func (c *Cluster) newOpts() *config.Options {
 	return genOpts(
 		server.WithHostPorts(c.addr),
 		server.WithKeepAlive(true),
+		server.WithReadTimeout(20*time.Second),
+		server.WithWriteTimeout(20*time.Second),
 		server.WithOnConnect(
 			func(ctx context.Context, conn network.Conn) context.Context {
 				rawConn, rwaConnection := getRawConn(conn)
@@ -392,16 +415,26 @@ func (c *Cluster) newOpts() *config.Options {
 							if rawConn != nil {
 								hlog.Debugf("on close fd:%d", fd)
 							}
+							if c.onClose != nil {
+								c.onClose(fd)
+							}
 							return nil
 						})
 				}
 				// if rawConn != nil {
 				// 	// hlog.Debugf("on connect fd:%d", rawConn.Fd())
 				// }
+				if c.onConnect != nil {
+					c.onConnect(fd)
+				}
 				return ctx
 			}),
 		server.WithOnAccept(func(conn net.Conn) context.Context {
 			// TODO WithOnAccept
+			if c.onAccept != nil {
+				// TODO FD
+				c.onAccept(0)
+			}
 			return context.Background()
 		}),
 	)
