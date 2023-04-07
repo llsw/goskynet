@@ -97,8 +97,8 @@ gorm:
 	gormt -H=127.0.0.1 --port=3306 -u=root -p=password \
 	-d=database -b=table -s=true -o ${MASTER_SRC}/lib/db/mysql/model
 
-tidy:
+td:
 	go mod tidy
 
-modclean:
+mc:
 	go clean -modcache
