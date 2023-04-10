@@ -65,7 +65,7 @@ func defalutHandler(addr interface{}, session uint32, args ...interface{}) {
 }
 
 func (c *Cluster) msg(cc *GateConn, ctx context.Context, conn network.Conn,
-	addr interface{}, session uint32, msgs []*MsgPart) {
+	addr interface{}, session uint32, msgs ...*MsgPart) {
 	defer utils.Recover(func(err error) {})
 	msg, sz, err := Concat(msgs)
 	ok := true
@@ -160,9 +160,7 @@ func (c *Cluster) OnMsg(req *Req) {
 	data := req.data.(*clusterData)
 	gateConn := req.gateConn
 	if data.padding == 0 {
-		msgs := make([]*MsgPart, 1)
-		msgs[0] = data.data
-		c.msg(gateConn, req.ctx, req.conn, data.addr, data.session, msgs)
+		c.msg(gateConn, req.ctx, req.conn, data.addr, data.session, data.data)
 	} else {
 		reqLargePkg := c.grabLargePkg(
 			gateConn, req.conn, data.session, data.addr)
@@ -178,7 +176,7 @@ func (c *Cluster) OnMsg(req *Req) {
 			addr := pkg.Addr
 			msgs := pkg.Msgs
 			gateConn.reqLargePkg.Delete(data.session)
-			c.msg(gateConn, req.ctx, req.conn, addr, data.session, msgs)
+			c.msg(gateConn, req.ctx, req.conn, addr, data.session, msgs...)
 		}
 	}
 
