@@ -287,9 +287,9 @@ func NewCluster(name string, addr string,
 	var gate *Gate
 	if addr != "" {
 		gate := NewGate(addr)
-		// gate.SetOnAccept(c.OnAccept)
+		gate.SetOnAccept(c.OnAccept)
 		gate.SetOnConnect(c.OnConnect)
-		// gate.SetOnClose(c.OnClose)
+		gate.SetOnClose(c.OnClose)
 		gate.SetOnMsg(c.OnMsg)
 		gate.SetOnUnpack(c.OnUnpack)
 	}
