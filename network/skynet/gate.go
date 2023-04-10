@@ -16,7 +16,6 @@ import (
 	"github.com/cloudwego/hertz/pkg/network/standard"
 	rawnet "github.com/cloudwego/netpoll"
 	share "github.com/llsw/goskynet/lib/share"
-	utils "github.com/llsw/goskynet/lib/utils"
 )
 
 type (
@@ -102,7 +101,7 @@ func (g *Gate) dispatchReq() {
 
 func (g *Gate) socket(gateConn *GateConn,
 	ctx context.Context, conn network.Conn) (err error) {
-	defer utils.Recover(func(err error) {
+	defer share.Recover(func(err error) {
 		if gateConn != nil && gateConn.ReqLargePkg != nil {
 			gateConn.ReqLargePkg.Delete(gateConn.LastSession)
 		}
@@ -202,9 +201,9 @@ func (g *Gate) onData(ctx context.Context, conn interface{}) (err error) {
 	case network.StreamConn:
 		err = g.socketStream(ctx, conn)
 	}
-	if err != nil {
-		hlog.Errorf("on data err:%s\n", err.Error())
-	}
+	// if err != nil {
+	// 	hlog.Errorf("on data err:%s\n", err.Error())
+	// }
 	return
 }
 
@@ -219,7 +218,7 @@ func (g *Gate) Response(cc *GateConn,
 		}
 	}
 	defer finish()
-	defer utils.Recover(func(err error) {
+	defer share.Recover(func(err error) {
 		finish()
 	})
 

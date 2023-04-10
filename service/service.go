@@ -22,7 +22,7 @@ type Method struct {
 }
 
 func (m *Method) call(req ...interface{}) (resp []interface{}, err error) {
-	defer utils.Recover(func(err error) {
+	defer share.Recover(func(err error) {
 		hlog.Debugf("call req:%v err %s ", req, err.Error())
 	})
 	actually := len(req)
@@ -452,7 +452,7 @@ func Receive(ctx actor.Context) {
 
 func CallDb(db string, dao string, crud string,
 	args ...interface{}) (res interface{}, err error) {
-	defer utils.Recover(func(e error) {
+	defer share.Recover(func(e error) {
 		err = e
 	})
 	args = utils.WrapInterface(dao, crud, args)

@@ -485,7 +485,6 @@ func UnpcakResponse(msg *[]byte, sz uint32) (session uint32,
 
 func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
 	msgslen := len(msgs)
-	// hlog.Debugf("Concat len:%d msgs:%v\n", msgslen, msgs)
 	if msgslen == 1 {
 		msg = msgs[0].Msg
 		sz = msgs[0].Sz

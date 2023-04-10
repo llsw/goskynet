@@ -66,7 +66,7 @@ func Recover(f func(error)) {
 	}
 	if err != nil {
 		err = errors.Wrap(err, "recover error")
-		hlog.Error(err.Error())
+		hlog.Errorf("%+v", err)
 		f(err)
 	}
 }

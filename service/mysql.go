@@ -94,7 +94,7 @@ func (act *MySQL) Call(dao string, crud string,
 	args ...interface{}) (resChan share.ResChan) {
 	resChan = make(share.ResChan)
 	var cb share.Act = func() (res *share.Res) {
-		defer utils.Recover(func(err error) {
+		defer share.Recover(func(err error) {
 			res = &share.Res{Err: err}
 			// resChan <- res
 		})

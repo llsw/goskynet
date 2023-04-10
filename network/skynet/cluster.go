@@ -8,7 +8,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/cloudwego/hertz/pkg/network"
-	utils "github.com/llsw/goskynet/lib/utils"
+	share "github.com/llsw/goskynet/lib/share"
 )
 
 type ClusterMsgHandler func(addr interface{}, session uint32, args ...interface{})
@@ -67,14 +67,14 @@ func defalutHandler(addr interface{}, session uint32, args ...interface{}) {
 
 func (c *Cluster) msg(cc *GateConn, ctx context.Context, conn network.Conn,
 	addr interface{}, session uint32, msgs ...*MsgPart) {
-	defer utils.Recover(func(err error) {})
+	defer share.Recover(func(err error) {})
 	msg, sz, err := Concat(msgs)
 	ok := true
 	var msgsz int
 	var resps []interface{}
 
 	cb := func(resps []interface{}, err error) {
-		defer utils.Recover(func(err error) {})
+		defer share.Recover(func(err error) {})
 		if err != nil {
 			ok = false
 			resps = []interface{}{err.Error()}
@@ -285,20 +285,37 @@ func NewCluster(name string, addr string,
 		handler = defalutHandler
 	}
 	var gate *Gate
-	if addr != "" {
-		gate := NewGate(addr)
-		gate.SetOnAccept(c.OnAccept)
-		gate.SetOnConnect(c.OnConnect)
-		gate.SetOnClose(c.OnClose)
-		gate.SetOnMsg(c.OnMsg)
-		gate.SetOnUnpack(c.OnUnpack)
-	}
+
 	c = &Cluster{
 		name:     name,
 		addr:     addr,
 		channels: make(map[string]*Channel),
 		handler:  handler,
-		gate:     gate,
 	}
+
+	if addr != "" {
+		gate = NewGate(addr)
+
+		gate.SetOnConnect(func(conn *GateConn) {
+			c.OnConnect(conn)
+		})
+		gate.SetOnAccept(func(conn net.Conn) {
+			c.OnAccept(conn)
+		})
+		gate.SetOnClose(func(conn *GateConn) {
+			c.OnClose(conn)
+		})
+		gate.SetOnUnpack(
+			func(conn *GateConn,
+				msg []byte, sz int) (data interface{}, err error) {
+				return c.OnUnpack(conn, msg, sz)
+			},
+		)
+		gate.SetOnMsg(func(conn *GateConn, req *Req) {
+			c.OnMsg(conn, req)
+		})
+		c.gate = gate
+	}
+
 	return
 }
