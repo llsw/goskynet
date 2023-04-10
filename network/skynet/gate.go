@@ -35,11 +35,12 @@ type (
 	}
 
 	GateConn struct {
-		lastSession  uint32
-		reqLargePkg  *sync.Map
-		reqLargeLock sync.Mutex
-		wirteLock    sync.Mutex
-		fd           int
+		Conn         network.Conn
+		LastSession  uint32
+		ReqLargePkg  *sync.Map
+		ReqLargeLock *sync.Mutex
+		WirteLock    *sync.Mutex
+		Fd           int
 		gp           *share.GroutinePool
 	}
 
@@ -50,11 +51,11 @@ type (
 		data     interface{}
 	}
 
-	OnConnect func(fd int, conn network.Conn)
+	OnConnect func(conn *GateConn)
 	OnAccept  func(conn net.Conn)
-	OnClose   func(fd int, conn network.Conn)
-	OnMsg     func(req *Req)
-	OnUnpack  func(msg []byte, sz int) (data interface{}, err error)
+	OnClose   func(conn *GateConn)
+	OnMsg     func(conn *GateConn, req *Req)
+	OnUnpack  func(conn *GateConn, msg []byte, sz int) (data interface{}, err error)
 )
 
 var (
@@ -64,7 +65,7 @@ var (
 func (g *Gate) dispatchReqOnce(req *Req) {
 	if g.onMsg != nil {
 		req.gateConn.gp.Job(20, func(args ...interface{}) {
-			g.onMsg(req)
+			g.onMsg(req.gateConn, req)
 		}, func(err error, args ...interface{}) {
 		})
 	}
@@ -102,8 +103,8 @@ func (g *Gate) dispatchReq() {
 func (g *Gate) socket(gateConn *GateConn,
 	ctx context.Context, conn network.Conn) (err error) {
 	defer utils.Recover(func(err error) {
-		if gateConn != nil && gateConn.reqLargePkg != nil {
-			gateConn.reqLargePkg.Delete(gateConn.lastSession)
+		if gateConn != nil && gateConn.ReqLargePkg != nil {
+			gateConn.ReqLargePkg.Delete(gateConn.LastSession)
 		}
 	})
 	defer conn.Release()
@@ -147,7 +148,7 @@ func (g *Gate) socket(gateConn *GateConn,
 		var cd interface{}
 
 		if g.onUnpack != nil {
-			cd, err = g.onUnpack(d, isz)
+			cd, err = g.onUnpack(gateConn, d, isz)
 			if err != nil {
 				// conn.Skip(rl)
 				return
@@ -209,12 +210,12 @@ func (g *Gate) onData(ctx context.Context, conn interface{}) (err error) {
 
 func (g *Gate) Response(cc *GateConn,
 	conn network.Conn, msgs []*MsgPart) (err error) {
-	cc.wirteLock.Lock()
+	cc.WirteLock.Lock()
 	done := false
 	finish := func() {
 		if !done {
 			done = true
-			cc.wirteLock.Unlock()
+			cc.WirteLock.Unlock()
 		}
 	}
 	defer finish()
@@ -249,9 +250,11 @@ func (g *Gate) getConn(fd int) (gc *GateConn) {
 		g.connLock.Lock()
 		defer g.connLock.Unlock()
 		gc = &GateConn{
-			lastSession: 0,
-			reqLargePkg: new(sync.Map),
-			fd:          fd,
+			LastSession: 0,
+			WirteLock:   new(sync.Mutex),
+			// 有大包的再自己new，没有的不要占内存
+			// reqLargePkg: new(sync.Map),
+			Fd: fd,
 			// 每个连接最多同时能开启多少个goroutine处理理多少个请求
 			gp: share.GreateGroutinePool(2 * cpuNum),
 		}
@@ -290,7 +293,7 @@ func (g *Gate) newOpts() *config.Options {
 			func(ctx context.Context, conn network.Conn) context.Context {
 				rawConn, rwaConnection := getRawConn(conn)
 				fd := rawConn.Fd()
-				// cc := g.getConn(fd)
+				gc := g.getConn(fd)
 
 				if rwaConnection != nil {
 					rwaConnection.AddCloseCallback(
@@ -304,13 +307,13 @@ func (g *Gate) newOpts() *config.Options {
 								hlog.Debugf("on close fd:%d", fd)
 							}
 							if g.onClose != nil {
-								g.onClose(fd, conn)
+								g.onClose(gc)
 							}
 							return nil
 						})
 				}
 				if g.onConnect != nil {
-					g.onConnect(fd, conn)
+					g.onConnect(gc)
 				}
 				return ctx
 			}),

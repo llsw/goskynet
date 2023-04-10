@@ -2,6 +2,7 @@ package skynet
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"sync"
 
@@ -118,20 +119,20 @@ func (c *Cluster) grabLargePkg(gc *GateConn, conn network.Conn,
 		return nil
 	}
 
-	if gc.reqLargePkg == nil {
+	if gc.ReqLargePkg == nil {
 		return nil
 	}
 
-	if v, ok := gc.reqLargePkg.Load(session); ok {
-		gc.lastSession = session
+	if v, ok := gc.ReqLargePkg.Load(session); ok {
+		gc.LastSession = session
 		return v.(*ReqLargePkg)
 	} else {
 		// TODO 这里的锁还可以根据session进行更细粒度的划分
 		// 但是大请求的情况比较少见，不要过度优化，如果性能瓶颈在这个再优化
-		gc.reqLargeLock.Lock()
-		defer gc.reqLargeLock.Unlock()
-		if v, ok := gc.reqLargePkg.Load(session); ok {
-			gc.lastSession = session
+		gc.ReqLargeLock.Lock()
+		defer gc.ReqLargeLock.Unlock()
+		if v, ok := gc.ReqLargePkg.Load(session); ok {
+			gc.LastSession = session
 			return v.(*ReqLargePkg)
 		} else {
 			// TODO 可以用对象池
@@ -140,25 +141,25 @@ func (c *Cluster) grabLargePkg(gc *GateConn, conn network.Conn,
 				Addr: addr,
 				Msgs: make([]*MsgPart, 0, 1),
 			}
-			gc.reqLargePkg.Store(session, pkg)
-			gc.lastSession = session
+			gc.ReqLargePkg.Store(session, pkg)
+			gc.LastSession = session
 			return pkg
 		}
 	}
 }
 
-func (c *Cluster) OnConnect(fd int, conn network.Conn) {
+func (c *Cluster) OnConnect(gc *GateConn) {
+	gc.ReqLargePkg = new(sync.Map)
 }
 
 func (c *Cluster) OnAccept(conn net.Conn) {
 }
 
-func (c *Cluster) OnClose(fd int, conn network.Conn) {
+func (c *Cluster) OnClose(gc *GateConn) {
 }
 
-func (c *Cluster) OnMsg(req *Req) {
+func (c *Cluster) OnMsg(gateConn *GateConn, req *Req) {
 	data := req.data.(*clusterData)
-	gateConn := req.gateConn
 	if data.padding == 0 {
 		c.msg(gateConn, req.ctx, req.conn, data.addr, data.session, data.data)
 	} else {
@@ -167,7 +168,7 @@ func (c *Cluster) OnMsg(req *Req) {
 		if reqLargePkg == nil {
 			return
 		}
-		if v, ok := gateConn.reqLargePkg.Load(data.session); ok {
+		if v, ok := gateConn.ReqLargePkg.Load(data.session); ok {
 			pkg := v.(*ReqLargePkg)
 			pkg.Msgs = append(reqLargePkg.Msgs, data.data)
 			if data.padding == 1 {
@@ -175,14 +176,14 @@ func (c *Cluster) OnMsg(req *Req) {
 			}
 			addr := pkg.Addr
 			msgs := pkg.Msgs
-			gateConn.reqLargePkg.Delete(data.session)
+			gateConn.ReqLargePkg.Delete(data.session)
 			c.msg(gateConn, req.ctx, req.conn, addr, data.session, msgs...)
 		}
 	}
 
 }
 
-func (c *Cluster) OnUnpack(msg []byte, sz int) (cd interface{}, err error) {
+func (c *Cluster) OnUnpack(gc *GateConn, msg []byte, sz int) (cd interface{}, err error) {
 	addr, session, data, padding, err := UnpcakRequest(&msg, uint32(sz))
 	if err != nil {
 		return
@@ -208,6 +209,9 @@ func (c *Cluster) Open() (err error) {
 }
 
 func (c *Cluster) ListenAndServe() (err error) {
+	if c.gate == nil {
+		return fmt.Errorf("cluster:%s addr:%s gate is nil", c.name, c.addr)
+	}
 	return c.gate.ListenAndServe()
 }
 
@@ -242,7 +246,6 @@ func (c *Cluster) Call(node string, addr interface{},
 	if err != nil {
 		return
 	}
-	// hlog.Debugf("addr:%v req:%v", addr, req)
 	return channel.Call(addr, req...)
 }
 
@@ -281,21 +284,21 @@ func NewCluster(name string, addr string,
 	if handler == nil {
 		handler = defalutHandler
 	}
-	gate := NewGate(addr)
+	var gate *Gate
+	if addr != "" {
+		gate := NewGate(addr)
+		// gate.SetOnAccept(c.OnAccept)
+		gate.SetOnConnect(c.OnConnect)
+		// gate.SetOnClose(c.OnClose)
+		gate.SetOnMsg(c.OnMsg)
+		gate.SetOnUnpack(c.OnUnpack)
+	}
 	c = &Cluster{
 		name:     name,
 		addr:     addr,
 		channels: make(map[string]*Channel),
 		handler:  handler,
 		gate:     gate,
-	}
-	// gate.SetOnAccept(c.OnAccept)
-	// gate.SetOnConnect(c.OnConnect)
-	// gate.SetOnClose(c.OnClose)
-	gate.SetOnMsg(c.OnMsg)
-	gate.SetOnUnpack(c.OnUnpack)
-	if err != nil {
-		hlog.Errorf("NewCluster fail err:%s\n", err.Error())
 	}
 	return
 }
