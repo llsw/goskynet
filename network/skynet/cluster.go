@@ -21,7 +21,7 @@ type clusterData struct {
 	addr    interface{}
 	session uint32
 	data    *MsgPart
-	padding bool
+	padding int
 }
 
 type Cluster struct {
@@ -112,29 +112,38 @@ func (c *Cluster) msg(cc *GateConn, ctx context.Context, conn network.Conn,
 	cb(resps, err)
 }
 
-func (c *Cluster) grabLargePkg(gateConn *GateConn, conn network.Conn,
+func (c *Cluster) grabLargePkg(gc *GateConn, conn network.Conn,
 	session uint32, addr interface{}) *ReqLargePkg {
-	if gateConn == nil {
+	if gc == nil {
 		return nil
 	}
 
-	if gateConn.reqLargePkg == nil {
+	if gc.reqLargePkg == nil {
 		return nil
 	}
 
-	if v, ok := gateConn.reqLargePkg.Load(session); ok {
-		gateConn.lastSession = session
+	if v, ok := gc.reqLargePkg.Load(session); ok {
+		gc.lastSession = session
 		return v.(*ReqLargePkg)
 	} else {
-		// TODO 可以用对象池
-		pkg := &ReqLargePkg{
-			Addr: addr,
-			Msgs: make([]*MsgPart, 0, 1),
+		// TODO 这里的锁还可以根据session进行更细粒度的划分
+		// 但是大请求的情况比较少见，不要过度优化，如果性能瓶颈在这个再优化
+		gc.reqLargeLock.Lock()
+		defer gc.reqLargeLock.Unlock()
+		if v, ok := gc.reqLargePkg.Load(session); ok {
+			gc.lastSession = session
+			return v.(*ReqLargePkg)
+		} else {
+			// TODO 可以用对象池
+			// 同样，如果是大请求比较多，这里可以优化成对象池，避免大量的申请对象
+			pkg := &ReqLargePkg{
+				Addr: addr,
+				Msgs: make([]*MsgPart, 0, 1),
+			}
+			gc.reqLargePkg.Store(session, pkg)
+			gc.lastSession = session
+			return pkg
 		}
-		// TODO 这里是否线程安全，包的顺序怎么办
-		gateConn.reqLargePkg.Store(session, pkg)
-		gateConn.lastSession = session
-		return pkg
 	}
 }
 
@@ -150,22 +159,27 @@ func (c *Cluster) OnClose(fd int, conn network.Conn) {
 func (c *Cluster) OnMsg(req *Req) {
 	data := req.data.(*clusterData)
 	gateConn := req.gateConn
-	// TODO 应该移到gate.socket去，防止大包顺序不一样
-	reqLargePkg := c.grabLargePkg(gateConn, req.conn, data.session, data.addr)
-	if reqLargePkg == nil {
-		return
-	}
-
-	if v, ok := gateConn.reqLargePkg.Load(data.session); ok {
-		pkg := v.(*ReqLargePkg)
-		pkg.Msgs = append(reqLargePkg.Msgs, data.data)
-		if data.padding {
+	if data.padding == 0 {
+		msgs := make([]*MsgPart, 1)
+		msgs[0] = data.data
+		c.msg(gateConn, req.ctx, req.conn, data.addr, data.session, msgs)
+	} else {
+		reqLargePkg := c.grabLargePkg(
+			gateConn, req.conn, data.session, data.addr)
+		if reqLargePkg == nil {
 			return
 		}
-		addr := pkg.Addr
-		msgs := pkg.Msgs
-		gateConn.reqLargePkg.Delete(data.session)
-		c.msg(gateConn, req.ctx, req.conn, addr, data.session, msgs)
+		if v, ok := gateConn.reqLargePkg.Load(data.session); ok {
+			pkg := v.(*ReqLargePkg)
+			pkg.Msgs = append(reqLargePkg.Msgs, data.data)
+			if data.padding == 1 {
+				return
+			}
+			addr := pkg.Addr
+			msgs := pkg.Msgs
+			gateConn.reqLargePkg.Delete(data.session)
+			c.msg(gateConn, req.ctx, req.conn, addr, data.session, msgs)
+		}
 	}
 
 }
@@ -175,6 +189,13 @@ func (c *Cluster) OnUnpack(msg []byte, sz int) (cd interface{}, err error) {
 	if err != nil {
 		return
 	}
+
+	if padding == 0 {
+		data.Id = 0
+	} else {
+		data.Id++
+	}
+
 	cd = &clusterData{
 		addr,
 		session,

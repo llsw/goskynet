@@ -6,12 +6,14 @@ import (
 	"fmt"
 	"math"
 	"reflect"
+	"sort"
 	"time"
 )
 
 type MsgPart struct {
 	Msg *[]byte
 	Sz  uint32
+	Id  uint8
 }
 
 const (
@@ -141,19 +143,11 @@ func packReqMulti(multipak int, session uint32, msg *[]byte, sz uint32, msgs []*
 			s = MULTI_PART
 			reqsz = s + 7
 			buf = make([]byte, reqsz)
-			if buf == nil {
-				err = fmt.Errorf("packReqNumber multipak memmory error")
-				return
-			}
 			buf[2] = 2
 		} else {
 			s = sz
 			reqsz = s + 7
 			buf = make([]byte, reqsz)
-			if buf == nil {
-				err = fmt.Errorf("packReqNumber multipak memmory error")
-				return
-			}
 			buf[2] = 3
 		}
 
@@ -221,8 +215,8 @@ func PackRequest(addr interface{}, session uint32,
 }
 
 func unpackReqNumber(msg *[]byte, sz uint32) (addr interface{},
-	session uint32, data *MsgPart, padding bool, err error) {
-	padding = false
+	session uint32, data *MsgPart, padding int, err error) {
+	padding = 0
 	bufa := (*msg)[1:5]
 	addr = unpackUint32(&bufa)
 	bufs := (*msg)[5:9]
@@ -238,13 +232,13 @@ func unpackReqNumber(msg *[]byte, sz uint32) (addr interface{},
 }
 
 func unpackMReqNumber(msg *[]byte, sz uint32) (addr interface{},
-	session uint32, data *MsgPart, padding bool, err error) {
+	session uint32, data *MsgPart, padding int, err error) {
 	if sz != 13 {
 		err = fmt.Errorf(
 			"invalid cluster message size %d multi req must be 13)", sz)
 		return
 	}
-	padding = true
+	padding = 1
 	bufa := (*msg)[1:5]
 	addr = unpackUint32(&bufa)
 	bufs := (*msg)[5:9]
@@ -258,13 +252,18 @@ func unpackMReqNumber(msg *[]byte, sz uint32) (addr interface{},
 }
 
 func unpackMReqPart(msg *[]byte, sz uint32) (addr interface{},
-	session uint32, data *MsgPart, padding bool, err error) {
+	session uint32, data *MsgPart, padding int, err error) {
 	if sz < 5 {
 		err = fmt.Errorf(
 			"invalid cluster message size %d multi part req must gt 5)", sz)
 		return
 	}
-	padding = ((*msg)[0] == 2)
+	if (*msg)[0] == 2 {
+		padding = 1
+	} else {
+		padding = 2
+	}
+
 	addr = 0
 	bufs := (*msg)[1:5]
 	session = unpackUint32(&bufs)
@@ -279,8 +278,8 @@ func unpackMReqPart(msg *[]byte, sz uint32) (addr interface{},
 }
 
 func unpackReqString(msg *[]byte, sz uint32) (addr interface{},
-	session uint32, data *MsgPart, padding bool, err error) {
-	padding = false
+	session uint32, data *MsgPart, padding int, err error) {
+	padding = 0
 	namesz := uint32((*msg)[1])
 	if sz < namesz+6 {
 		err = fmt.Errorf(
@@ -303,13 +302,13 @@ func unpackReqString(msg *[]byte, sz uint32) (addr interface{},
 }
 
 func unpackMReqString(msg *[]byte, sz uint32) (addr interface{},
-	session uint32, data *MsgPart, padding bool, err error) {
+	session uint32, data *MsgPart, padding int, err error) {
 	if sz < 2 {
 		err = fmt.Errorf(
 			"unpackMReqString invalid cluster message (size=%d)", sz)
 		return
 	}
-	padding = true
+	padding = 1
 	namesz := uint32((*msg)[1])
 	if sz < namesz+10 {
 		err = fmt.Errorf(
@@ -330,7 +329,7 @@ func unpackMReqString(msg *[]byte, sz uint32) (addr interface{},
 }
 
 func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{},
-	session uint32, data *MsgPart, padding bool, err error) {
+	session uint32, data *MsgPart, padding int, err error) {
 	switch (*msg)[0] {
 	case 0:
 		addr, session, data, padding, err = unpackReqNumber(msg, sz)
@@ -494,6 +493,12 @@ func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
 		sz = unpackUint32(msgs[0].Msg)
 		buf := make([]byte, sz)
 		offset := uint32(0)
+
+		// 收到的多个包进行排序
+		sort.SliceStable(msgs, func(i, j int) bool {
+			return msgs[i].Id < msgs[j].Id
+		})
+
 		for i := 1; i < msgslen; i++ {
 			temp := msgs[i]
 			s := temp.Sz
