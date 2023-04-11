@@ -61,6 +61,16 @@ make macosx
 └── platform.mk                     # make平台相关
 ```
 
+## 自定义网络协议
+1. 本项目只实现了集群间rpc，未处理来自外部客户端的消息，不同的客户端需求不一样，本项目难以兼顾。
+2. 如果想添加外部消息协议，比如http、grpc，可以在service文件夹新建个服务，接收请求，收到请求后再再集群间rpc处理。例如http可以使用gin、echo、hertz等优秀的开源http框架。grpc这个就不用说了，go对grpc支持很友好。
+3. 如果是自定义的tcp协议，可以复用network/skynet/gate.go，具体例子参照network/skynet/cluster.go NewCluster方法，实现自己的网络相关回调方法。底层已经使用了netpoll，不需要自己处理多路复用。
+* SetOnAccept  接受连接
+* SetOnConnect 连接建立
+* SetClose     连接断开
+* SetOnUnpack  解网络包，目前网络包的格式为2个字节(大端)包长度+包体
+* SetOnMsg     解网络包后的消息处理
+
 ## 性能测试
 1. macosx 12线程 QPS 15w 未能榨干CPU
 ```bash
