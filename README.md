@@ -4,7 +4,7 @@ go 实现的skynet cluster，可以和lua版的skynet互相通信。集群底层
 ## 鸣谢
 * 云风大佬的[skynet](https://github.com/cloudwu/skynet.git)
 * asynkron的[protoactor-go](https://github.com/asynkron/protoactor-go.git)
-* 字节跳动的[netpooll](https://github.com/cloudwego/hertz/tree/develop/pkg/network/netpoll)
+* 字节跳动的[netpoll](https://github.com/cloudwego/hertz/tree/develop/pkg/network/netpoll)
 
 
 # env
@@ -63,7 +63,7 @@ make macosx
 
 ## 自定义网络协议
 1. 本项目只实现了集群间rpc，未处理来自外部客户端的消息，不同的客户端需求不一样，本项目难以兼顾。
-2. 如果想添加外部消息协议，比如http、grpc，可以在service文件夹新建个服务，接收请求，收到请求后再再集群间rpc处理。例如http可以使用gin、echo、hertz等优秀的开源http框架。grpc这个就不用说了，go对grpc支持很友好。
+2. 如果想添加外部消息协议，比如http、grpc，可以在service文件夹新建个服务，接收请求，收到请求后再集群间rpc处理。例如http可以使用gin、echo、hertz等优秀的开源http框架。grpc这个就不用说了，go对grpc支持很友好。
 3. 如果是自定义的tcp协议，可以复用network/skynet/gate.go，具体例子参照network/skynet/cluster.go NewCluster方法，实现自己的网络相关回调方法。底层已经使用了netpoll，不需要自己处理多路复用。
 * SetOnAccept  接受连接
 * SetOnConnect 连接建立
