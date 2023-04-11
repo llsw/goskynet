@@ -61,7 +61,6 @@ type Channel struct {
 	rdbuf        []byte // read buffer
 	wrbuf        []byte // write buffer
 	session      uint32
-	methodMutex  sync.Mutex
 	sessionMutex sync.Mutex
 	sessions     map[uint32]*Call
 	largePkg     map[uint32][]*MsgPart
@@ -89,12 +88,9 @@ func (c *Channel) grabSession(session uint32) *Call {
 	return nil
 }
 
-var reqNum = 0
-
 func (c *Channel) WritePacket(msg []byte, sz uint16) error {
 	c.writeMutex.Lock()
 	defer c.writeMutex.Unlock()
-	reqNum++
 	if sz > MSG_MAX_LEN {
 		return fmt.Errorf(
 			"message size(%d) should be less than %d",
@@ -105,17 +101,13 @@ func (c *Channel) WritePacket(msg []byte, sz uint16) error {
 	writer := c.rw.Writer()
 	_, err := writer.WriteBinary(msg)
 	writer.Flush()
-	// hlog.Debugf("req num:%d", reqNum)
 	return err
 }
-
-var respNum = 0
 
 func (c *Channel) readPacket() (reader netpoll.Reader, sz int, err error) {
 	c.readMutex.Lock()
 	defer c.readMutex.Unlock()
 	// stime := time.Now().UnixMilli()
-	respNum++
 	conn := c.rw.Reader()
 	szh, err := conn.Peek(2)
 	if err != nil {
@@ -219,16 +211,11 @@ func (c *Channel) DispatchResOnce() (ok bool, err error) {
 func (c *Channel) DispatchRes() {
 	for {
 		_, err := c.DispatchResOnce()
-
-		// if ok {
-		// 	return
-		// }
 		if err != nil && err == io.EOF {
 			if err == io.EOF {
 				return
 			}
 			hlog.Debugf("dispatch error:%s", err.Error())
-			// return
 		}
 	}
 }
@@ -255,7 +242,24 @@ func (c *Channel) DispatchReq() {
 }
 
 func (c *Channel) testMultiPkg(msgs []*MsgPart) {
-	msg := []byte{0, 26, 128, 4, 105, 107, 117, 110, 1, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110, 2, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110, 3, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110, 4, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110, 5, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110, 6, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110, 7, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110, 8, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117, 110,
+	msg := []byte{0, 26, 128, 4, 105, 107, 117, 110, 1, 0, 0, 0, 36, 73,
+		107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117,
+		110, 0, 26, 128, 4, 105, 107, 117, 110, 2, 0, 0, 0, 36, 73,
+		107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105,
+		107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110,
+		3, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101,
+		108, 108, 111, 36, 105, 107, 117, 110, 0, 26, 128,
+		4, 105, 107, 117, 110, 4, 0, 0, 0, 36, 73, 107, 117,
+		110, 44, 104, 101, 108, 108, 111, 36, 105, 107, 117,
+		110, 0, 26, 128, 4, 105, 107, 117, 110, 5, 0, 0, 0, 36,
+		73, 107, 117, 110, 44, 104, 101, 108, 108, 111, 36, 105,
+		107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110, 6, 0,
+		0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108, 111,
+		36, 105, 107, 117, 110, 0, 26, 128, 4, 105, 107, 117, 110,
+		7, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108, 108,
+		111, 36, 105, 107, 117, 110, 0, 26, 128, 4, 105, 107, 117,
+		110, 8, 0, 0, 0, 36, 73, 107, 117, 110, 44, 104, 101, 108,
+		108, 111, 36, 105, 107, 117, 110,
 		// wrong data
 		00, 99, 1,
 	}
@@ -267,9 +271,25 @@ func (c *Channel) testMultiPkg(msgs []*MsgPart) {
 	c.reqChan <- msgs
 }
 
+func errDoneChan(addr interface{}, session uint32, done chan *Call) (err error) {
+	if cap(done) == 0 {
+		switch addr.(type) {
+		case uint32:
+			err = fmt.Errorf(
+				"call addr:%d session:%d with unbuffered done channel",
+				addr, session)
+		case string:
+			err = fmt.Errorf(
+				"call addr:%s session:%d with unbuffered done channel",
+				addr, session)
+		}
+	}
+	return
+}
+
 // unblock call a Channel which has a reply
-func (c *Channel) Go(addr interface{}, session uint32, req []interface{}, cb *Call, done chan *Call) (call *Call, err error) {
-	// stime := time.Now().UnixMilli()
+func (c *Channel) Go(addr interface{}, session uint32,
+	req []interface{}, cb *Call, done chan *Call) (call *Call, err error) {
 	rpc := c.rpc
 
 	var msgs []*MsgPart
@@ -280,13 +300,8 @@ func (c *Channel) Go(addr interface{}, session uint32, req []interface{}, cb *Ca
 		done = make(chan *Call, 1)
 	} else {
 		if cb == nil && done != nil {
-			if cap(done) == 0 {
-				switch addr.(type) {
-				case uint32:
-					err = fmt.Errorf("call addr:%d session:%d with unbuffered done channel", addr, session)
-				case string:
-					err = fmt.Errorf("call addr:%s session:%d with unbuffered done channel", addr, session)
-				}
+			err = errDoneChan(addr, session, done)
+			if err != nil {
 				return
 			}
 		}
@@ -325,7 +340,6 @@ func (c *Channel) CallNoBlock(addr interface{}, req ...interface{}) {
 	f := req[index].(CallbackFun)
 	call := &Call{
 		ResponseCallback: func(rc *Call) {
-			// hlog.Debugf("rc %v f %v", rc.Resp.Data, f)
 			if rc.Err != nil {
 				f(nil, rc.Err)
 				return

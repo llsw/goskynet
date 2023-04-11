@@ -2,7 +2,6 @@ package skynet
 
 import (
 	"errors"
-	"sync"
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/cloudwego/netpoll"
@@ -20,11 +19,10 @@ type rpcHeader struct {
 }
 
 type Rpc struct {
-	idMap        map[int32]int
-	nameMap      map[string]int
-	methodMap    map[string]int
-	sessionMutex sync.Mutex
-	sessions     map[int32]int
+	idMap     map[int32]int
+	nameMap   map[string]int
+	methodMap map[string]int
+	sessions  map[int32]int
 }
 
 func (rpc *Rpc) Dispatch(reader netpoll.Reader, sz int) (session uint32, ok bool, data *MsgPart, padding bool, err error) {
@@ -48,10 +46,9 @@ func (rpc *Rpc) Dispatch(reader netpoll.Reader, sz int) (session uint32, ok bool
 }
 
 // session > 0: need response
-func (rpc *Rpc) RequestEncode(addr interface{}, session uint32, req []interface{}) (msgs []*MsgPart, err error) {
-	// hlog.Debugf("RequestEncode0 %d %v\n", session, addr)
+func (rpc *Rpc) RequestEncode(addr interface{},
+	session uint32, req []interface{}) (msgs []*MsgPart, err error) {
 	msg, sz, err := Pack(req)
-	// hlog.Debugf("RequestEncode1 %d %v\n", msg, sz)
 	if err != nil {
 		return
 	}
@@ -59,7 +56,6 @@ func (rpc *Rpc) RequestEncode(addr interface{}, session uint32, req []interface{
 	_, msgs, err = PackRequest(
 		addr, session, msg, uint32(sz),
 	)
-	// hlog.Debugf("RequestEncode2 %v\n", msgs)
 	if err != nil {
 		return
 	}
