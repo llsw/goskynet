@@ -102,3 +102,6 @@ td:
 
 mc:
 	go clean -modcache
+
+tree:
+	tree --dirsfirst -L 2
