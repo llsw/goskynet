@@ -595,7 +595,9 @@ func (act *Svc) Open() {
 	}
 }
 
-func NewSvc(svcName string, conf *SvcConf, receiver ...interface{}) {
+func NewSvc(svcName string, conf *SvcConf,
+	receiver ...interface{}) (pids []*actor.PID, err error) {
+	pids = make([]*actor.PID, conf.ReplicaSet)
 	for i := 0; i < conf.ReplicaSet; i++ {
 		methods := make(map[string]map[string]*share.Method)
 		for _, v := range receiver {
@@ -610,6 +612,12 @@ func NewSvc(svcName string, conf *SvcConf, receiver ...interface{}) {
 			methods: methods,
 			gp:      share.GreateGroutinePool(conf.GroutinePool),
 		}
-		skynet.NewService(svcName, svc)
+		var pid *actor.PID
+		pid, err = skynet.NewService(svcName, svc)
+		if err != nil {
+			return
+		}
+		pids[i] = pid
 	}
+	return
 }
