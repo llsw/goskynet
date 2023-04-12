@@ -10,6 +10,7 @@ import (
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	share "github.com/llsw/goskynet/lib/share"
 	utils "github.com/llsw/goskynet/lib/utils"
+	"github.com/pkg/errors"
 )
 
 var onceIns sync.Once
@@ -465,4 +466,150 @@ func CallDb(db string, dao string, crud string,
 	res = r.Data
 	err = r.Err
 	return
+}
+
+type (
+	SvcConf struct {
+		ReplicaSet   int `yaml:"replicaSet"`   // 副本数，开多少个service
+		Parallel     int `yaml:"parallel"`     // 每个service同时执行多少个call
+		ActTimeout   int `yaml:"actTimeout"`   //执行超时，单位秒
+		GroutinePool int `yaml:"groutinePool"` // 最多能开启多少个协程
+	}
+
+	Svc struct {
+		Name    string
+		Pid     *actor.PID
+		conf    *SvcConf
+		req     share.ReqChan
+		methods map[string]map[string]*share.Method
+		gp      *share.GroutinePool
+	}
+	ServiceMethod func(args ...interface{}) *share.Res
+)
+
+// ===必须实现===
+func (act *Svc) Init(name string, pid *actor.PID) (err error) {
+	act.Name = name
+	act.Pid = pid
+	return
+}
+
+func (act *Svc) Start(name string, pid *actor.PID) {
+	act.Open()
+}
+
+func (act *Svc) Stop(name string, pid *actor.PID) (err error) {
+	return
+}
+
+// ===必须实现===
+
+// ===自定义消息处理方法===
+
+func (act *Svc) dispatch() {
+	for a := range act.req {
+		// 设置执行超时要换成goroutine,
+		// 如果并发很高的话groutine太多
+		// 可以使用goroutine对象池
+		// 在池子里面获取到goroutine再开启goroutine
+		// 这样能防止高并发下groutine暴涨
+		act.gp.Job(act.conf.ActTimeout, func(args ...interface{}) {
+			a := args[0].(*share.Req)
+			a.Res <- a.Act()
+		}, func(err error, args ...interface{}) {
+			a := args[0].(*share.Req)
+			a.Res <- &share.Res{
+				Err: errors.Wrap(err, "crud error"),
+			}
+		}, a)
+	}
+}
+
+func (act *Svc) CallNoBlock(mod string, method string,
+	args ...interface{}) (resChan share.ResChan) {
+	resChan = make(share.ResChan)
+	var cb share.Act = func() (res *share.Res) {
+		defer share.Recover(func(err error) {
+			res = &share.Res{Err: err}
+		})
+		if ms, ok := act.methods[mod]; ok {
+			if f, ok := ms[method]; ok {
+				l := len(args) + 2
+				wrap := make([]interface{}, l)
+				wrap[0] = act
+				for i := 1; i < l; i++ {
+					wrap[i] = args[i-1]
+				}
+				res = f.Call(wrap...)
+			} else {
+				res = &share.Res{
+					Err: fmt.Errorf("method:%s not found", method),
+				}
+			}
+		} else {
+			res = &share.Res{
+				Err: fmt.Errorf("svc:%s mod:%s not found", act.Name, mod),
+			}
+		}
+		return
+	}
+	action := &share.Req{
+		Act: cb,
+		Res: resChan,
+	}
+	act.req <- action
+	return
+}
+
+func (act *Svc) Call(mod string, method string,
+	args ...interface{}) (res *share.Res) {
+	defer share.Recover(func(err error) {
+		res = &share.Res{Err: err}
+	})
+	if ms, ok := act.methods[mod]; ok {
+		if f, ok := ms[method]; ok {
+			l := len(args) + 2
+			wrap := make([]interface{}, l)
+			wrap[0] = act
+			for i := 1; i < l; i++ {
+				wrap[i] = args[i-1]
+			}
+			res = f.Call(wrap...)
+		} else {
+			res = &share.Res{
+				Err: fmt.Errorf("method:%s not found", method),
+			}
+		}
+	} else {
+		res = &share.Res{
+			Err: fmt.Errorf("svc:%s mod:%s not found", act.Name, mod),
+		}
+	}
+	return
+
+}
+
+func (act *Svc) Open() {
+	for i := 0; i < act.conf.Parallel; i++ {
+		go act.dispatch()
+	}
+}
+
+func NewSvc(svcName string, conf *SvcConf, receiver ...interface{}) {
+	for i := 0; i < conf.ReplicaSet; i++ {
+		methods := make(map[string]map[string]*share.Method)
+		for _, v := range receiver {
+			val := reflect.Indirect(reflect.ValueOf(v))
+			mod := val.Type().Name()
+			methods[mod] = utils.Register(v)
+		}
+
+		svc := &Svc{
+			conf:    conf,
+			req:     make(share.ReqChan, conf.Parallel),
+			methods: methods,
+			gp:      share.GreateGroutinePool(conf.GroutinePool),
+		}
+		skynet.NewService(svcName, svc)
+	}
 }
