@@ -46,8 +46,8 @@ func (m *Method) Call(args ...interface{}) (res *Res) {
 	in := make([]reflect.Value, actually+1)
 	in[0] = m.Rcvr
 
-	for i := 1; i < actually+1; i++ {
-		in[i] = reflect.ValueOf(args[i-1])
+	for i := 0; i < actually; i++ {
+		in[i+1] = reflect.ValueOf(args[i])
 	}
 	temp := m.Method.Func.Call(in)
 	res = temp[0].Interface().(*Res)
