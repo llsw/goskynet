@@ -101,13 +101,11 @@ func (act *MySQL) Call(dao string, crud string,
 		if d, ok := act.cruds[dao]; ok {
 			if f, ok := d[crud]; ok {
 				l := len(args)
-				wrap := make([]interface{}, l+4)
-				wrap[0] = f.Rcvr
-				wrap[1] = act
-				wrap[2] = act.db
-				wrap[3] = act.sqlDb
+				wrap := make([]interface{}, l+3)
+				wrap[0] = act
+				wrap[1] = act.db
 				for i := 0; i < l; i++ {
-					wrap[i+4] = args[i]
+					wrap[i+3] = args[i]
 				}
 				res = f.Call(wrap...)
 			} else {

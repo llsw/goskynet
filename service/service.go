@@ -535,11 +535,10 @@ func (act *Svc) CallNoBlock(mod string, method string,
 		if ms, ok := act.methods[mod]; ok {
 			if f, ok := ms[method]; ok {
 				l := len(args)
-				wrap := make([]interface{}, l+2)
-				wrap[0] = f.Rcvr
-				wrap[1] = act
+				wrap := make([]interface{}, l+1)
+				wrap[0] = act
 				for i := 0; i < l; i++ {
-					wrap[i+2] = args[i]
+					wrap[i+1] = args[i]
 				}
 				res = f.Call(wrap...)
 			} else {
@@ -570,11 +569,10 @@ func (act *Svc) Call(mod string, method string,
 	if ms, ok := act.methods[mod]; ok {
 		if f, ok := ms[method]; ok {
 			l := len(args)
-			wrap := make([]interface{}, l+2)
-			wrap[0] = f.Rcvr
-			wrap[1] = act
+			wrap := make([]interface{}, l+1)
+			wrap[0] = act
 			for i := 0; i < l; i++ {
-				wrap[i+2] = args[i]
+				wrap[i+1] = args[i]
 			}
 			res = f.Call(wrap...)
 		} else {

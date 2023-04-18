@@ -104,12 +104,11 @@ func (act *Redis) Call(dao string, crud string,
 		if d, ok := act.cruds[dao]; ok {
 			if f, ok := d[crud]; ok {
 				l := len(args)
-				wrap := make([]interface{}, l+2)
-				wrap[0] = f.Rcvr
-				wrap[1] = act
-				wrap[2] = act.db
-				for i := 1; i < l; i++ {
-					wrap[i] = args[i-1]
+				wrap := make([]interface{}, l+1)
+				wrap[0] = act
+				wrap[1] = act.db
+				for i := 0; i < l; i++ {
+					wrap[i+1] = args[i]
 				}
 				res = f.Call(wrap...)
 			} else {
