@@ -11,6 +11,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/cloudwego/netpoll"
+	share "github.com/llsw/goskynet/lib/share"
 )
 
 const (
@@ -143,6 +144,9 @@ func (c *Channel) grabLargePkg(session uint32) []*MsgPart {
 
 // dispatch one packet
 func (c *Channel) DispatchResOnce() (ok bool, err error) {
+	defer share.Recover(func(err error) {
+		hlog.Errorf("DispatchResOnce error:%s", err.Error())
+	})
 	reader, sz, err := c.readPacket()
 	if err != nil {
 		return
@@ -222,6 +226,9 @@ func (c *Channel) DispatchRes() {
 
 func (c *Channel) DispatchReqOnce(msgs []*MsgPart) (err error) {
 	for _, msg := range msgs {
+		defer share.Recover(func(err error) {
+			hlog.Errorf("DispatchReqOnce error:%s", err.Error())
+		})
 		err = c.WritePacket(*(msg.Msg), uint16(msg.Sz))
 		if err != nil {
 			return
