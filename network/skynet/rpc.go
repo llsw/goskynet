@@ -5,6 +5,7 @@ import (
 
 	"github.com/cloudwego/hertz/pkg/common/hlog"
 	"github.com/cloudwego/netpoll"
+	share "github.com/llsw/goskynet/lib/share"
 )
 
 var (
@@ -31,6 +32,12 @@ func (rpc *Rpc) Dispatch(reader netpoll.Reader, sz int) (session uint32, ok bool
 	if err != nil {
 		return
 	}
+
+	defer share.Recover(func(e error) {
+		hlog.Errorf("Dispatch error:%s", e.Error())
+		reader.Release()
+		err = e
+	})
 	session, ok, data, padding, err = UnpcakResponse(&msg, uint32(sz))
 	reader.Release()
 	if err != nil {
