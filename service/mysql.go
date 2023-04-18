@@ -104,6 +104,7 @@ func (act *MySQL) Call(dao string, crud string,
 				wrap := make([]interface{}, l+3)
 				wrap[0] = act
 				wrap[1] = act.db
+				wrap[2] = act.sqlDb
 				for i := 0; i < l; i++ {
 					wrap[i+3] = args[i]
 				}
