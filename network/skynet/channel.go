@@ -144,9 +144,6 @@ func (c *Channel) grabLargePkg(session uint32) []*MsgPart {
 
 // dispatch one packet
 func (c *Channel) DispatchResOnce() (ok bool, err error) {
-	defer share.Recover(func(err error) {
-		hlog.Errorf("DispatchResOnce error:%s", err.Error())
-	})
 	reader, sz, err := c.readPacket()
 	if err != nil {
 		return

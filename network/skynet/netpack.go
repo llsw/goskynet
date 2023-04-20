@@ -8,6 +8,9 @@ import (
 	"reflect"
 	"sort"
 	"time"
+
+	"github.com/cloudwego/hertz/pkg/common/hlog"
+	share "github.com/llsw/goskynet/lib/share"
 )
 
 type MsgPart struct {
@@ -172,6 +175,11 @@ func PackRequest(addr interface{}, session uint32,
 	msg *[]byte, sz uint32) (nextSession uint32, msgs []*MsgPart, err error) {
 	nextSession = session
 
+	defer share.Recover(func(e error) {
+		hlog.Errorf("pack request error:%s", err.Error())
+		err = e
+	})
+
 	if msg == nil {
 		err = fmt.Errorf("packrequest Invalid request message")
 		return
@@ -330,6 +338,10 @@ func unpackMReqString(msg *[]byte, sz uint32) (addr interface{},
 
 func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{},
 	session uint32, data *MsgPart, padding int, err error) {
+	defer share.Recover(func(e error) {
+		hlog.Errorf("upack request error:%s", err.Error())
+		err = e
+	})
 	switch (*msg)[0] {
 	case 0:
 		addr, session, data, padding, err = unpackReqNumber(msg, sz)
@@ -349,6 +361,10 @@ func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{},
 
 func PackResponse(session uint32, ok bool,
 	msg *[]byte, sz uint32) (padding []*MsgPart, err error) {
+	defer share.Recover(func(e error) {
+		hlog.Errorf("pack response error:%s", err.Error())
+		err = e
+	})
 	if !ok {
 		if sz > MULTI_PART {
 			// truncate the error msg if too long
@@ -441,6 +457,10 @@ func PackResponse(session uint32, ok bool,
 
 func UnpcakResponse(msg *[]byte, sz uint32) (session uint32,
 	ok bool, data *MsgPart, padding bool, err error) {
+	defer share.Recover(func(e error) {
+		hlog.Errorf("upack response error:%s", err.Error())
+		err = e
+	})
 	if sz < 5 {
 		err = fmt.Errorf("UnpcakResponse msg sz < 5 sz:%d", sz)
 		return
@@ -484,6 +504,10 @@ func UnpcakResponse(msg *[]byte, sz uint32) (session uint32,
 }
 
 func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
+	defer share.Recover(func(e error) {
+		hlog.Errorf("concat error:%s", err.Error())
+		err = e
+	})
 	msgslen := len(msgs)
 	if msgslen == 1 {
 		msg = msgs[0].Msg
@@ -649,6 +673,10 @@ func packOne(v interface{}, b *block, depth int) (err error) {
 
 // 定义一个pack函数，用于序列化lua数据
 func Pack(args []interface{}) (msg *[]byte, sz int, err error) {
+	defer share.Recover(func(e error) {
+		hlog.Errorf("pack error:%s", err.Error())
+		err = e
+	})
 	// 创建一个block
 	b := &block{
 		buffer: new(bytes.Buffer),
@@ -906,6 +934,10 @@ func pushValue(msg *[]byte, offset uint32,
 }
 
 func Unpack(msg *[]byte, sz uint32) (args []interface{}, err error) {
+	defer share.Recover(func(e error) {
+		hlog.Errorf("unpack error:%s", err.Error())
+		err = e
+	})
 	args = make([]interface{}, 0, 10)
 	var offset uint32 = 0
 	st := time.Now().Unix()
