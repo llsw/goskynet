@@ -176,7 +176,7 @@ func PackRequest(addr interface{}, session uint32,
 	nextSession = session
 
 	defer share.Recover(func(e error) {
-		hlog.Errorf("pack request error:%s", err.Error())
+		hlog.Errorf("pack request error:%s", e.Error())
 		err = e
 	})
 
@@ -339,7 +339,7 @@ func unpackMReqString(msg *[]byte, sz uint32) (addr interface{},
 func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{},
 	session uint32, data *MsgPart, padding int, err error) {
 	defer share.Recover(func(e error) {
-		hlog.Errorf("upack request error:%s", err.Error())
+		hlog.Errorf("upack request error:%s", e.Error())
 		err = e
 	})
 	switch (*msg)[0] {
@@ -362,7 +362,7 @@ func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{},
 func PackResponse(session uint32, ok bool,
 	msg *[]byte, sz uint32) (padding []*MsgPart, err error) {
 	defer share.Recover(func(e error) {
-		hlog.Errorf("pack response error:%s", err.Error())
+		hlog.Errorf("pack response error:%s", e.Error())
 		err = e
 	})
 	if !ok {
@@ -458,7 +458,7 @@ func PackResponse(session uint32, ok bool,
 func UnpcakResponse(msg *[]byte, sz uint32) (session uint32,
 	ok bool, data *MsgPart, padding bool, err error) {
 	defer share.Recover(func(e error) {
-		hlog.Errorf("upack response error:%s", err.Error())
+		hlog.Errorf("upack response error:%s", e.Error())
 		err = e
 	})
 	if sz < 5 {
@@ -505,7 +505,7 @@ func UnpcakResponse(msg *[]byte, sz uint32) (session uint32,
 
 func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
 	defer share.Recover(func(e error) {
-		hlog.Errorf("concat error:%s", err.Error())
+		hlog.Errorf("concat error:%s", e.Error())
 		err = e
 	})
 	msgslen := len(msgs)
@@ -674,7 +674,7 @@ func packOne(v interface{}, b *block, depth int) (err error) {
 // 定义一个pack函数，用于序列化lua数据
 func Pack(args []interface{}) (msg *[]byte, sz int, err error) {
 	defer share.Recover(func(e error) {
-		hlog.Errorf("pack error:%s", err.Error())
+		hlog.Errorf("pack error:%s", e.Error())
 		err = e
 	})
 	// 创建一个block
@@ -935,7 +935,7 @@ func pushValue(msg *[]byte, offset uint32,
 
 func Unpack(msg *[]byte, sz uint32) (args []interface{}, err error) {
 	defer share.Recover(func(e error) {
-		hlog.Errorf("unpack error:%s", err.Error())
+		hlog.Errorf("unpack error:%s", e.Error())
 		err = e
 	})
 	args = make([]interface{}, 0, 10)

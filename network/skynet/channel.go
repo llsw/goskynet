@@ -223,8 +223,9 @@ func (c *Channel) DispatchRes() {
 
 func (c *Channel) DispatchReqOnce(msgs []*MsgPart) (err error) {
 	for _, msg := range msgs {
-		defer share.Recover(func(err error) {
-			hlog.Errorf("DispatchReqOnce error:%s", err.Error())
+		defer share.Recover(func(e error) {
+			hlog.Errorf("DispatchReqOnce error:%s", e.Error())
+			err = e
 		})
 		err = c.WritePacket(*(msg.Msg), uint16(msg.Sz))
 		if err != nil {
