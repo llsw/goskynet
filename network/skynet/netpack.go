@@ -58,6 +58,9 @@ func fillUint32(buf *[]byte, n uint32) {
 }
 
 func unpackUint32(buf *[]byte) uint32 {
+	if buf == nil || len(*buf) < 4 {
+		return 0
+	}
 	return uint32((*buf)[0]) | uint32((*buf)[1])<<8 | uint32((*buf)[2])<<16 | uint32((*buf)[3])<<24
 }
 
@@ -513,14 +516,18 @@ func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
 		msg = msgs[0].Msg
 		sz = msgs[0].Sz
 	} else {
-		sz = unpackUint32(msgs[0].Msg)
-		buf := make([]byte, sz)
-		offset := uint32(0)
-
 		// 收到的多个包进行排序
 		sort.SliceStable(msgs, func(i, j int) bool {
 			return msgs[i].Id < msgs[j].Id
 		})
+
+		if msgs[0].Sz < 4 || len(*msgs[0].Msg) < 4 {
+			err = fmt.Errorf("concat error msg sz:%d  %d no enough", msgs[0].Sz, len(*msgs[0].Msg))
+			return
+		}
+		sz = unpackUint32(msgs[0].Msg)
+		buf := make([]byte, sz)
+		offset := uint32(0)
 
 		for i := 1; i < msgslen; i++ {
 			temp := msgs[i]
