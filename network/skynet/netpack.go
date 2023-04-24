@@ -177,12 +177,6 @@ func packReqMulti(multipak int, session uint32, msg *[]byte, sz uint32, msgs []*
 func PackRequest(addr interface{}, session uint32,
 	msg *[]byte, sz uint32) (nextSession uint32, msgs []*MsgPart, err error) {
 	nextSession = session
-
-	defer share.Recover(func(e error) {
-		hlog.Errorf("pack request error:%s", e.Error())
-		err = e
-	})
-
 	if msg == nil {
 		err = fmt.Errorf("packrequest Invalid request message")
 		return
@@ -227,6 +221,10 @@ func PackRequest(addr interface{}, session uint32,
 
 func unpackReqNumber(msg *[]byte, sz uint32) (addr interface{},
 	session uint32, data *MsgPart, padding int, err error) {
+	if msg == nil || len(*msg) < int(sz) {
+		err = fmt.Errorf("unpcak req number invalid msg %v need:%d", msg, sz)
+		return
+	}
 	padding = 0
 	bufa := (*msg)[1:5]
 	addr = unpackUint32(&bufa)
@@ -244,9 +242,8 @@ func unpackReqNumber(msg *[]byte, sz uint32) (addr interface{},
 
 func unpackMReqNumber(msg *[]byte, sz uint32) (addr interface{},
 	session uint32, data *MsgPart, padding int, err error) {
-	if sz != 13 {
-		err = fmt.Errorf(
-			"invalid cluster message size %d multi req must be 13)", sz)
+	if msg == nil || len(*msg) < 13 || sz < 13 {
+		err = fmt.Errorf("unpcak multi req number invalid msg %v need:%d", msg, 13)
 		return
 	}
 	padding = 1
@@ -264,9 +261,8 @@ func unpackMReqNumber(msg *[]byte, sz uint32) (addr interface{},
 
 func unpackMReqPart(msg *[]byte, sz uint32) (addr interface{},
 	session uint32, data *MsgPart, padding int, err error) {
-	if sz < 5 {
-		err = fmt.Errorf(
-			"invalid cluster message size %d multi part req must gt 5)", sz)
+	if msg == nil || len(*msg) < 5 || sz < 5 {
+		err = fmt.Errorf("unpcak multi req part invalid msg %v need:%d", msg, 5)
 		return
 	}
 	if (*msg)[0] == 2 {
@@ -290,13 +286,23 @@ func unpackMReqPart(msg *[]byte, sz uint32) (addr interface{},
 
 func unpackReqString(msg *[]byte, sz uint32) (addr interface{},
 	session uint32, data *MsgPart, padding int, err error) {
+	if msg == nil || len(*msg) < 2 {
+		err = fmt.Errorf("unpcak req string invalid msg %v need:%d", msg, 2)
+		return
+	}
 	padding = 0
 	namesz := uint32((*msg)[1])
 	if sz < namesz+6 {
 		err = fmt.Errorf(
-			"unpackReqString invalid cluster message (size=%d)", sz)
+			"unpack req string invalid cluster message (size=%d)", sz)
 		return
 	}
+
+	if len(*msg) < int(namesz+6) {
+		err = fmt.Errorf("unpcak multi req part invalid msg %v need:%d", msg, namesz+6)
+		return
+	}
+
 	bufa := make([]byte, namesz)
 	copy(bufa, (*msg)[2:2+namesz])
 	addr = string(bufa)
@@ -314,16 +320,15 @@ func unpackReqString(msg *[]byte, sz uint32) (addr interface{},
 
 func unpackMReqString(msg *[]byte, sz uint32) (addr interface{},
 	session uint32, data *MsgPart, padding int, err error) {
-	if sz < 2 {
-		err = fmt.Errorf(
-			"unpackMReqString invalid cluster message (size=%d)", sz)
+	if msg == nil || len(*msg) < 2 {
+		err = fmt.Errorf("unpcak multi req string invalid msg %v need:%d", msg, 2)
 		return
 	}
 	padding = 1
 	namesz := uint32((*msg)[1])
-	if sz < namesz+10 {
+	if sz < namesz+10 || len(*msg) < int(namesz+10) {
 		err = fmt.Errorf(
-			"unpackMReqString invalid cluster message (size=%d)", sz)
+			"unpack multi req string invalid cluster message (size=%d)", sz)
 		return
 	}
 	bufa := make([]byte, namesz)
@@ -341,10 +346,10 @@ func unpackMReqString(msg *[]byte, sz uint32) (addr interface{},
 
 func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{},
 	session uint32, data *MsgPart, padding int, err error) {
-	defer share.Recover(func(e error) {
-		hlog.Errorf("upack request error:%s", e.Error())
-		err = e
-	})
+	if msg == nil || len(*msg) < 1 {
+		err = fmt.Errorf("unpcak request invalid msg %v", msg)
+		return
+	}
 	switch (*msg)[0] {
 	case 0:
 		addr, session, data, padding, err = unpackReqNumber(msg, sz)
@@ -364,10 +369,6 @@ func UnpcakRequest(msg *[]byte, sz uint32) (addr interface{},
 
 func PackResponse(session uint32, ok bool,
 	msg *[]byte, sz uint32) (padding []*MsgPart, err error) {
-	defer share.Recover(func(e error) {
-		hlog.Errorf("pack response error:%s", e.Error())
-		err = e
-	})
 	if !ok {
 		if sz > MULTI_PART {
 			// truncate the error msg if too long
@@ -460,10 +461,6 @@ func PackResponse(session uint32, ok bool,
 
 func UnpcakResponse(msg *[]byte, sz uint32) (session uint32,
 	ok bool, data *MsgPart, padding bool, err error) {
-	defer share.Recover(func(e error) {
-		hlog.Errorf("upack response error:%s", e.Error())
-		err = e
-	})
 	if sz < 5 {
 		err = fmt.Errorf("UnpcakResponse msg sz < 5 sz:%d", sz)
 		return
@@ -507,10 +504,6 @@ func UnpcakResponse(msg *[]byte, sz uint32) (session uint32,
 }
 
 func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
-	defer share.Recover(func(e error) {
-		hlog.Errorf("concat error:%s", e.Error())
-		err = e
-	})
 	msgslen := len(msgs)
 	if msgslen == 1 {
 		msg = msgs[0].Msg
@@ -521,8 +514,8 @@ func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
 			return msgs[i].Id < msgs[j].Id
 		})
 
-		if msgs[0].Sz < 4 || len(*msgs[0].Msg) < 4 {
-			err = fmt.Errorf("concat error msg sz:%d  %d no enough", msgs[0].Sz, len(*msgs[0].Msg))
+		if msgs[0].Msg == nil || msgs[0].Sz < 4 || len(*msgs[0].Msg) < 4 {
+			err = fmt.Errorf("concat error msg:%v need:%d  no enough", *msgs[0].Msg, msgs[0].Sz)
 			return
 		}
 		sz = unpackUint32(msgs[0].Msg)
@@ -532,12 +525,22 @@ func Concat(msgs []*MsgPart) (msg *[]byte, sz uint32, err error) {
 		for i := 1; i < msgslen; i++ {
 			temp := msgs[i]
 			s := temp.Sz
-			copy(buf[offset:s], *temp.Msg)
-			offset += s
+			roffset := offset + s
+			if roffset < sz {
+				err = fmt.Errorf("concat error buff:%d need:%d no enough", sz, roffset)
+				return
+			}
+
+			if temp.Msg == nil || len(*temp.Msg) < int(s) {
+				err = fmt.Errorf("concat error msg:%v need:%d  no enough", *temp.Msg, temp.Sz)
+				return
+			}
+			copy(buf[offset:roffset], *temp.Msg)
+			offset = roffset
 		}
 		if offset != sz {
 			err = fmt.Errorf(
-				"Concat msg no enough sz:%d offset:%d", sz, offset)
+				"concat msg no enough sz:%d offset:%d", sz, offset)
 			return
 		}
 		msg = &buf
@@ -721,9 +724,17 @@ func getInt(msg *[]byte, offset uint32,
 		arg = 0
 	case TYPE_NUMBER_BYTE:
 		roffset = offset + 1
+		if msg == nil || len(*msg) < int(roffset) {
+			err = fmt.Errorf("get int invalid msg:%v need:%d", msg, roffset)
+			return
+		}
 		arg = int((*msg)[offset])
 	case TYPE_NUMBER_WORD:
 		roffset = offset + 2
+		if msg == nil || len(*msg) < int(roffset) {
+			err = fmt.Errorf("get int invalid msg:%v need:%d", msg, roffset)
+			return
+		}
 		arg = binary.LittleEndian.Uint16((*msg)[offset:roffset])
 		if arg.(uint16) >= 0x8000 {
 			arg = arg.(int16)
@@ -732,10 +743,18 @@ func getInt(msg *[]byte, offset uint32,
 		}
 	case TYPE_NUMBER_DWORD:
 		roffset = offset + 4
+		if msg == nil || len(*msg) < int(roffset) {
+			err = fmt.Errorf("get int invalid msg:%v need:%d", msg, roffset)
+			return
+		}
 		arg = binary.LittleEndian.Uint32((*msg)[offset:roffset])
 		arg = int32(arg.(uint32))
 	case TYPE_NUMBER_QWORD:
 		roffset = offset + 8
+		if msg == nil || len(*msg) < int(roffset) {
+			err = fmt.Errorf("get int invalid msg:%v need:%d", msg, roffset)
+			return
+		}
 		arg = binary.LittleEndian.Uint64((*msg)[offset:roffset])
 		arg = arg.(int64)
 	default:
@@ -746,6 +765,10 @@ func getInt(msg *[]byte, offset uint32,
 
 func unpackOne(msg *[]byte, offset uint32,
 	allsz uint32) (roffset uint32, arg interface{}, err error) {
+	if msg == nil || len(*msg) < int(offset)+1 {
+		err = fmt.Errorf("unpack one invalid msg:%v need:%d", msg, offset+1)
+		return
+	}
 	if offset >= allsz-1 {
 		roffset = offset
 		return
@@ -892,6 +915,10 @@ func pushValue(msg *[]byte, offset uint32,
 		if vc == TYPE_NUMBER_REAL {
 			start := offset
 			offset = offset + 8
+			if msg == nil || len(*msg) < int(offset)+8 {
+				err = fmt.Errorf("push value invalid msg:%v need:%d", msg, offset+8)
+				return
+			}
 			buf := (*msg)[start:offset]
 			arg = getFloat64(buf)
 		} else {
@@ -904,29 +931,49 @@ func pushValue(msg *[]byte, offset uint32,
 		start := offset
 		l := uint32(vc)
 		offset = start + l
+		if msg == nil || len(*msg) < int(offset) {
+			err = fmt.Errorf("push value invalid msg:%v need:%d", msg, offset)
+			return
+		}
 		buf := make([]byte, l)
 		copy(buf, (*msg)[start:offset])
 		arg = string(buf)
 	case TYPE_LONG_STRING:
 		if vc == 2 {
 			start := offset
+			if msg == nil || len(*msg) < int(start+2) {
+				err = fmt.Errorf("push value invalid msg:%v need:%d", msg, start+2)
+				return
+			}
 			sz := binary.LittleEndian.Uint16((*msg)[start : start+2])
 			start = start + uint32(2)
 			l := uint32(sz)
 			offset = start + l
+			if len(*msg) < int(offset) {
+				err = fmt.Errorf("push value invalid msg:%v need:%d", msg, offset)
+				return
+			}
 			buf := make([]byte, l)
 			copy(buf, (*msg)[start:offset])
 			arg = buf
 		} else {
 			if vc != 4 {
-				err = fmt.Errorf("invalid serialize stream vc:%d", vc)
+				err = fmt.Errorf("push value invalid serialize stream vc:%d", vc)
 				return
 			}
 			start := offset
+			if msg == nil || len(*msg) < int(start+4) {
+				err = fmt.Errorf("push value invalid msg:%v need:%d", msg, start+4)
+				return
+			}
 			sz := binary.LittleEndian.Uint32((*msg)[start : start+4])
 			start = start + uint32(4)
 			l := uint32(sz)
 			offset = start + l
+			if len(*msg) < int(offset) {
+				err = fmt.Errorf("unpack one invalid msg:%v need:%d", msg, offset)
+				return
+			}
 			buf := make([]byte, l)
 			copy(buf, (*msg)[start:offset])
 			arg = string(buf)
@@ -941,10 +988,6 @@ func pushValue(msg *[]byte, offset uint32,
 }
 
 func Unpack(msg *[]byte, sz uint32) (args []interface{}, err error) {
-	defer share.Recover(func(e error) {
-		hlog.Errorf("unpack error:%s", e.Error())
-		err = e
-	})
 	args = make([]interface{}, 0, 10)
 	var offset uint32 = 0
 	st := time.Now().Unix()
