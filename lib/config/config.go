@@ -35,7 +35,7 @@ type ConfigStruct struct {
 	Pprof       *PprofConifg `yaml:"pprof"`
 	Clustername string       `yaml:"clustername"`
 	Extend      string       `yaml:"extend"`
-	Config      Config       `yaml:"config"`
+	Config      *Config      `yaml:"config"`
 }
 
 type ConfigReader struct {
@@ -102,7 +102,7 @@ func loadExtend(c *ConfigReaderStruct) error {
 			return err
 		}
 
-		c.config.Config = extend
+		c.config.Config = &extend
 		c.lastExtendModified = time.Now()
 	}
 	return nil
@@ -185,9 +185,12 @@ func (c *ConfigReaderStruct) getConfigStruct() (*ConfigStruct, error) {
 
 		if fileInfo.ModTime().After(c.lastExtendModified) {
 			oldExtend := c.config.Config
-			if oldExtend != nil {
-				// 比较新旧配置
-				c.compareConfigs(&oldExtend, &c.config.Config)
+			err = loadExtend(c)
+			if err == nil {
+				if oldExtend != nil {
+					// 比较新旧配置
+					c.compareConfigs(oldExtend, c.config.Config)
+				}
 			}
 		}
 	}
