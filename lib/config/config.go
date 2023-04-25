@@ -1,7 +1,6 @@
 package config
 
 import (
-	"fmt"
 	"io/ioutil"
 	"os"
 	"reflect"
@@ -24,19 +23,20 @@ type LogConfig struct {
 	Level    hlog.Level `yaml:"level"`
 	Interval int64      `yaml:"interval"`
 }
+type Config map[string]interface{}
 
 type ConfigStruct struct {
 	// 定义你的配置项
 	Name        string       `yaml:"name"`
 	Address     string       `yaml:"address"`
-	Version     string       `yaml:"Version"`
+	Version     string       `yaml:"version"`
 	Workers     int          `yaml:"workers"`
 	Log         *LogConfig   `yaml:"log"`
 	Pprof       *PprofConifg `yaml:"pprof"`
 	Clustername string       `yaml:"clustername"`
+	Extend      string       `yaml:"extend"`
+	Config      Config       `yaml:"config"`
 }
-
-type Config map[string]interface{}
 
 type ConfigReader struct {
 	configFilePath string
@@ -46,10 +46,11 @@ type ConfigReader struct {
 }
 
 type ConfigReaderStruct struct {
-	configFilePath string
-	lastModified   time.Time
-	config         *ConfigStruct
-	mutex          sync.Mutex
+	configFilePath     string
+	lastModified       time.Time
+	lastExtendModified time.Time
+	config             *ConfigStruct
+	mutex              sync.Mutex
 }
 
 func NewConfigReader(configFilePath string) *ConfigReader {
@@ -88,6 +89,25 @@ func (c *ConfigReader) loadConfig() error {
 	return nil
 }
 
+func loadExtend(c *ConfigReaderStruct) error {
+	if c.config.Extend != "" {
+		data, err := ioutil.ReadFile(c.config.Extend)
+		if err != nil {
+			return err
+		}
+
+		extend := Config{}
+		err = yaml.Unmarshal(data, &extend)
+		if err != nil {
+			return err
+		}
+
+		c.config.Config = extend
+		c.lastExtendModified = time.Now()
+	}
+	return nil
+}
+
 func (c *ConfigReaderStruct) loadConfigStruct() error {
 	data, err := ioutil.ReadFile(c.configFilePath)
 	if err != nil {
@@ -101,6 +121,9 @@ func (c *ConfigReaderStruct) loadConfigStruct() error {
 	}
 
 	c.config = config
+
+	loadExtend(c)
+
 	c.lastModified = time.Now()
 
 	return nil
@@ -127,6 +150,7 @@ func (c *ConfigReader) getConfig() (*Config, error) {
 			c.compareConfigs(oldConfig, c.config)
 		}
 	}
+
 	return c.config, nil
 }
 
@@ -150,6 +174,21 @@ func (c *ConfigReaderStruct) getConfigStruct() (*ConfigStruct, error) {
 		if oldConfig != nil {
 			// 比较新旧配置
 			c.compareConfigsStruct(oldConfig, c.config)
+		}
+	}
+
+	if c.config != nil && c.config.Extend != "" {
+		fileInfo, err = os.Stat(c.config.Extend)
+		if err != nil {
+			return nil, err
+		}
+
+		if fileInfo.ModTime().After(c.lastExtendModified) {
+			oldExtend := c.config.Config
+			if oldExtend != nil {
+				// 比较新旧配置
+				c.compareConfigs(&oldExtend, &c.config.Config)
+			}
 		}
 	}
 
@@ -183,7 +222,45 @@ func (c *ConfigReaderStruct) compareConfigsStruct(oldConfig *ConfigStruct,
 				ofv.Interface(),
 				nfv.Interface(),
 			)
+
+			if ov.Type().Field(i).Name == "Extend" {
+				loadExtend(c)
+			}
 		}
+	}
+}
+
+func (c *ConfigReaderStruct) compareConfigs(oldConfig *Config,
+	newConfig *Config) {
+	missingKeys := make(map[string]bool)
+	for key, oldValue := range *oldConfig {
+		newValue, ok := (*newConfig)[key]
+		if !ok {
+			missingKeys[key] = true
+			continue
+		}
+		if !reflect.DeepEqual(oldValue, newValue) {
+			hlog.Infof(
+				"Key %s: old value %v, new value %v\n",
+				key, oldValue, newValue,
+			)
+		}
+	}
+
+	for key, _ := range *newConfig {
+		if _, ok := (*oldConfig)[key]; !ok {
+			hlog.Infof(
+				"Key %s is present in "+
+					"new config but not in old config\n", key,
+			)
+		}
+	}
+
+	for key, _ := range missingKeys {
+		hlog.Infof(
+			"Key %s is present in "+
+				"old config but not in new config\n", key,
+		)
 	}
 }
 
@@ -197,7 +274,7 @@ func (c *ConfigReader) compareConfigs(oldConfig *Config,
 			continue
 		}
 		if !reflect.DeepEqual(oldValue, newValue) {
-			fmt.Printf(
+			hlog.Infof(
 				"Key %s: old value %v, new value %v\n",
 				key, oldValue, newValue,
 			)
@@ -206,7 +283,7 @@ func (c *ConfigReader) compareConfigs(oldConfig *Config,
 
 	for key, _ := range *newConfig {
 		if _, ok := (*oldConfig)[key]; !ok {
-			fmt.Printf(
+			hlog.Infof(
 				"Key %s is present in "+
 					"new config but not in old config\n", key,
 			)
@@ -214,7 +291,7 @@ func (c *ConfigReader) compareConfigs(oldConfig *Config,
 	}
 
 	for key, _ := range missingKeys {
-		fmt.Printf(
+		hlog.Infof(
 			"Key %s is present in "+
 				"old config but not in new config\n", key,
 		)
