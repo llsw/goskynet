@@ -1,7 +1,9 @@
 package skynet
 
 import (
+	"context"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -112,6 +114,7 @@ func (c *Channel) readPacket() (reader netpoll.Reader, sz int, err error) {
 	conn := c.rw.Reader()
 	szh, err := conn.Peek(2)
 	if err != nil {
+		hlog.Debugf("dddddddddd:%s %t", err.Error(), errors.Is(err, io.EOF))
 		return
 	}
 	conn.Skip(2)
@@ -209,14 +212,24 @@ func (c *Channel) DispatchResOnce() (ok bool, err error) {
 }
 
 // dispatch until error
-func (c *Channel) DispatchRes() {
+func (c *Channel) DispatchRes(ctx context.Context, closeChannle func()) {
+	_, cancelFunction := context.WithCancel(ctx)
+	defer func() {
+		cancelFunction()
+		closeChannle()
+	}()
 	for {
-		_, err := c.DispatchResOnce()
-		if err != nil && err == io.EOF {
-			if err == io.EOF {
-				return
+		select {
+		case <-ctx.Done():
+			return
+		default:
+			_, err := c.DispatchResOnce()
+			if err != nil {
+				hlog.Debugf("dispatch error:%s", err.Error())
+				if errors.Is(err, io.EOF) || err.Error() == io.EOF.Error() {
+					return
+				}
 			}
-			hlog.Debugf("dispatch error:%s", err.Error())
 		}
 	}
 }
@@ -236,12 +249,17 @@ func (c *Channel) DispatchReqOnce(msgs []*MsgPart) (err error) {
 }
 
 // dispatch until error
-func (c *Channel) DispatchReq() {
+func (c *Channel) DispatchReq(ctx context.Context, closeChannle func()) {
 	for {
-		req := <-c.reqChan
-		err := c.DispatchReqOnce(req)
-		if err != nil {
-			hlog.Debugf("dispatch error:%s", err.Error())
+		select {
+		case <-ctx.Done():
+			close(c.reqChan)
+			return
+		case req := <-c.reqChan:
+			err := c.DispatchReqOnce(req)
+			if err != nil {
+				hlog.Debugf("dispatch error:%s", err.Error())
+			}
 		}
 	}
 }
@@ -380,7 +398,7 @@ func (c *Channel) SetOnUnknownPacket(onUnknown OnUnknownPacket) {
 	c.onUnknown = onUnknown
 }
 
-func NewChannel(addr string) (ch *Channel, err error) {
+func NewChannel(addr string, ctx context.Context, closeChannle func()) (ch *Channel, err error) {
 	dialer := netpoll.NewDialer()
 	var conn netpoll.Connection
 	conn, err = dialer.DialConnection(
@@ -413,8 +431,8 @@ func NewChannel(addr string) (ch *Channel, err error) {
 		reqChan:   make(chan []*MsgPart, 500),
 	}
 
-	go ch.DispatchRes()
-	go ch.DispatchReq()
+	go ch.DispatchRes(ctx, closeChannle)
+	go ch.DispatchReq(ctx, closeChannle)
 
 	return
 }

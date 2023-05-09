@@ -13,11 +13,11 @@ func main() {
 	cluster.StartCluster("v0.1.2", func() {
 		// time.AfterFunc(3*time.Second, test)
 		// time.AfterFunc(30*time.Second, test)
-		for {
-			utils.DelayFunc(1, func() {
-				go test()
-			})
-		}
+		// for {
+		utils.DelayFunc(1, func() {
+			go test()
+		})
+		// }
 	}, func() {
 
 	})
@@ -39,7 +39,7 @@ func callIkun(wg *sync.WaitGroup, index int) {
 func test() {
 	var wg *sync.WaitGroup = new(sync.WaitGroup)
 	st := time.Now().UnixMilli()
-	num := 10000
+	num := 10
 	wg.Add(num)
 	for i := 0; i < 10; i++ {
 		go func() {

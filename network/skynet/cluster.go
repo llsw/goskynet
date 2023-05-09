@@ -226,7 +226,23 @@ func (c *Cluster) getChannel(addr string) (channel *Channel, err error) {
 			channel = ch
 			return
 		} else {
-			c.channels[addr], err = NewChannel(addr)
+			ctx := context.Background()
+			c.channels[addr], err = NewChannel(addr, ctx, func() {
+				if _, ok := c.channels[addr]; !ok {
+					return
+				}
+				c.clock.Lock()
+				defer c.clock.Unlock()
+				if _, ok := c.channels[addr]; !ok {
+					return
+				} else {
+					hlog.Errorf(
+						"node channel finish node:%s",
+						addr,
+					)
+					delete(c.channels, addr)
+				}
+			})
 			if err != nil {
 				hlog.Errorf(
 					"node getChannel fail, node:%s, error:%s\n",
