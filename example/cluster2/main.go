@@ -36,10 +36,21 @@ func callIkun(wg *sync.WaitGroup, index int) {
 	cluster.CallNoBlock("cluster1", "ikun", "Ikun", "hello", "ikun", cb)
 }
 
+func test1() {
+	var cb cluster.CbFun = func(resp interface{}, err error) {
+		if err != nil {
+			hlog.Errorf("call cluster1 fail error:%s", err)
+
+			return
+		}
+	}
+	cluster.CallNoBlock("cluster1", "ikun", "Ikun", "hello", "ikun", cb)
+}
+
 func test() {
 	var wg *sync.WaitGroup = new(sync.WaitGroup)
 	st := time.Now().UnixMilli()
-	num := 10
+	num := 10000
 	wg.Add(num)
 	for i := 0; i < 10; i++ {
 		go func() {

@@ -109,7 +109,6 @@ func (c *Cluster) msg(cc *GateConn, ctx context.Context, conn network.Conn,
 			return
 		}
 	}
-
 	cb(resps, err)
 }
 
@@ -227,7 +226,7 @@ func (c *Cluster) getChannel(addr string) (channel *Channel, err error) {
 			return
 		} else {
 			ctx := context.Background()
-			c.channels[addr], err = NewChannel(addr, ctx, func() {
+			c.channels[addr], err = NewChannel(c.name, addr, ctx, func() {
 				if _, ok := c.channels[addr]; !ok {
 					return
 				}
@@ -237,7 +236,7 @@ func (c *Cluster) getChannel(addr string) (channel *Channel, err error) {
 					return
 				} else {
 					hlog.Errorf(
-						"node channel finish node:%s",
+						"node channel finish node:%s %s", c.name,
 						addr,
 					)
 					delete(c.channels, addr)
@@ -245,8 +244,8 @@ func (c *Cluster) getChannel(addr string) (channel *Channel, err error) {
 			})
 			if err != nil {
 				hlog.Errorf(
-					"node getChannel fail, node:%s, error:%s\n",
-					addr, err.Error(),
+					"node getChannel fail, node:%s %s, error:%s\n",
+					c.name, addr, err.Error(),
 				)
 				return
 			}
@@ -295,7 +294,7 @@ func (c *Cluster) GetAddr() string {
 }
 
 func NewCluster(name string, addr string,
-	handler ClusterMsgHandler) (c *Cluster, err error) {
+	handler ClusterMsgHandler, jobTimeout int) (c *Cluster, err error) {
 
 	if handler == nil {
 		handler = defalutHandler
@@ -310,7 +309,7 @@ func NewCluster(name string, addr string,
 	}
 
 	if addr != "" {
-		gate = NewGate(addr)
+		gate = NewGate(addr, jobTimeout)
 
 		gate.SetOnConnect(func(conn *GateConn) {
 			c.OnConnect(conn)

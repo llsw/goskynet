@@ -16,15 +16,16 @@ var skynet = GetInstance()
 
 type (
 	Cluster struct {
-		name   string
-		addr   string
-		worker *skynetCore.Cluster
+		name       string
+		addr       string
+		worker     *skynetCore.Cluster
+		jobTimeout int
 	}
 )
 
 // ===必须实现===
 func (c *Cluster) Init(name string, pid *actor.PID) (err error) {
-	worker, err := skynetCore.NewCluster(c.name, c.addr, c.onData)
+	worker, err := skynetCore.NewCluster(c.name, c.addr, c.onData, c.jobTimeout)
 	if err != nil {
 		hlog.Errorf("start cluster:%s error:%s", name, err.Error())
 		return
@@ -59,7 +60,6 @@ func (c *Cluster) onData(addr interface{}, session uint32, args ...interface{}) 
 				if err == nil {
 					resp = res.([]interface{})
 				}
-				f(resp, err)
 			}
 			f(resp, err)
 		}
@@ -140,12 +140,16 @@ func Open(configPath string) (c *skynetCore.Cluster, close func(), err error) {
 	close = func() {
 		l.Close()
 	}
-
+	jt := cc.JobTimeout
+	if jt == 0 {
+		jt = 20
+	}
 	ins := GetInstance()
 	for i := 0; i < workers; i++ {
 		worker := Cluster{}
-		worker.name = name
+		worker.name = fmt.Sprintf("%s_w%d", name, i)
 		worker.addr = "" // 空地址表示不监听
+		worker.jobTimeout = jt
 		_, err = ins.newService(cv.SERVICE.CLUSTER, &worker)
 		if err != nil {
 			hlog.Errorf("NewService cluster error:%s", err.Error())
@@ -154,8 +158,9 @@ func Open(configPath string) (c *skynetCore.Cluster, close func(), err error) {
 	}
 
 	master := Cluster{}
-	master.name = name
+	master.name = fmt.Sprintf("%s_m", name)
 	master.addr = adrr
+	master.jobTimeout = jt
 	_, err = ins.newService(cv.SERVICE.CLUSTER, &master)
 	if err != nil {
 		hlog.Errorf("NewService cluster error:%s", err.Error())

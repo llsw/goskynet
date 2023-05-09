@@ -192,7 +192,7 @@ func GetConifgPath(ver string) (path string) {
 
 func RunNumGoroutineMonitor() {
 	for {
-		hlog.Debugf("groutine ->%d\n", runtime.NumGoroutine())
+		hlog.Debugf("groutine -> %d\n", runtime.NumGoroutine())
 		time.Sleep(60 * time.Second)
 	}
 }

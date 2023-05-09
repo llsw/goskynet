@@ -31,6 +31,7 @@ type (
 		onMsg       OnMsg
 		onUnpack    OnUnpack
 		reqChan     chan *Req
+		jobTimeout  int
 	}
 
 	GateConn struct {
@@ -63,7 +64,7 @@ var (
 
 func (g *Gate) dispatchReqOnce(req *Req) {
 	if g.onMsg != nil {
-		req.gateConn.gp.Job(20, func(args ...interface{}) {
+		req.gateConn.gp.Job(g.jobTimeout, func(args ...interface{}) {
 			g.onMsg(req.gateConn, req)
 		}, func(err error, args ...interface{}) {
 		})
@@ -221,7 +222,6 @@ func (g *Gate) Response(cc *GateConn,
 	defer share.Recover(func(err error) {
 		finish()
 	})
-
 	for _, v := range msgs {
 		_, err = conn.WriteBinary(*v.Msg)
 		if err != nil {
@@ -365,11 +365,12 @@ func (g *Gate) ListenAndServe() (err error) {
 	return
 }
 
-func NewGate(addr string) *Gate {
+func NewGate(addr string, jobTimeout int) *Gate {
 	g := &Gate{
-		addr:    addr,
-		conns:   new(sync.Map),
-		reqChan: make(chan *Req, 2000),
+		addr:       addr,
+		conns:      new(sync.Map),
+		reqChan:    make(chan *Req, 2000),
+		jobTimeout: jobTimeout,
 	}
 	// 派发网络包的协程数量，太多未必快
 	num := cpuNum

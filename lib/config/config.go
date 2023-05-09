@@ -36,6 +36,7 @@ type ConfigStruct struct {
 	Clustername string       `yaml:"clustername"`
 	Extend      string       `yaml:"extend"`
 	Config      *Config      `yaml:"config"`
+	JobTimeout  int          `yaml:"jobTimeout"`
 }
 
 type ConfigReader struct {

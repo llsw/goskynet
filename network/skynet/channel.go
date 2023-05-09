@@ -57,6 +57,8 @@ func (call *Call) done() {
 }
 
 type Channel struct {
+	name         string
+	addr         string
 	rpc          *Rpc
 	readMutex    sync.Mutex // gates read one at a time
 	writeMutex   sync.Mutex // gates write one at a time
@@ -114,15 +116,11 @@ func (c *Channel) readPacket() (reader netpoll.Reader, sz int, err error) {
 	conn := c.rw.Reader()
 	szh, err := conn.Peek(2)
 	if err != nil {
-		hlog.Debugf("dddddddddd:%s %t", err.Error(), errors.Is(err, io.EOF))
 		return
 	}
 	conn.Skip(2)
 	sz = int(binary.BigEndian.Uint16(szh))
-
 	reader, err = conn.Slice(sz)
-
-	// hlog.Debugf("resp num:%d", respNum)
 	if err != nil {
 		return
 	}
@@ -223,12 +221,12 @@ func (c *Channel) DispatchRes(ctx context.Context, closeChannle func()) {
 		case <-ctx.Done():
 			return
 		default:
-			_, err := c.DispatchResOnce()
-			if err != nil {
-				hlog.Debugf("dispatch error:%s", err.Error())
-				if errors.Is(err, io.EOF) || err.Error() == io.EOF.Error() {
-					return
-				}
+		}
+		_, err := c.DispatchResOnce()
+		if err != nil {
+			hlog.Debugf("dispatch error:%s", err.Error())
+			if errors.Is(err, io.EOF) || err.Error() == io.EOF.Error() {
+				return
 			}
 		}
 	}
@@ -336,7 +334,6 @@ func (c *Channel) Go(addr interface{}, session uint32,
 	}
 	call = cb
 	c.setSession(session, call)
-
 	c.reqChan <- msgs
 	// c.testMultiPkg(msgs)
 	return
@@ -398,7 +395,7 @@ func (c *Channel) SetOnUnknownPacket(onUnknown OnUnknownPacket) {
 	c.onUnknown = onUnknown
 }
 
-func NewChannel(addr string, ctx context.Context, closeChannle func()) (ch *Channel, err error) {
+func NewChannel(name string, addr string, ctx context.Context, closeChannle func()) (ch *Channel, err error) {
 	dialer := netpoll.NewDialer()
 	var conn netpoll.Connection
 	conn, err = dialer.DialConnection(
@@ -420,15 +417,19 @@ func NewChannel(addr string, ctx context.Context, closeChannle func()) (ch *Chan
 	}
 
 	ch = &Channel{
-		rpc:       rpc,
-		rw:        conn,
-		rdbuf:     make([]byte, MSG_MAX_LEN+2),
-		wrbuf:     make([]byte, MSG_MAX_LEN+2),
-		sessions:  make(map[uint32]*Call),
-		largePkg:  make(map[uint32][]*MsgPart),
-		onUnknown: defaultOnUnknownPacket,
-		session:   0,
-		reqChan:   make(chan []*MsgPart, 500),
+		name:     name,
+		addr:     addr,
+		rpc:      rpc,
+		rw:       conn,
+		rdbuf:    make([]byte, MSG_MAX_LEN+2),
+		wrbuf:    make([]byte, MSG_MAX_LEN+2),
+		sessions: make(map[uint32]*Call),
+		largePkg: make(map[uint32][]*MsgPart),
+		onUnknown: func(session uint32, data interface{}) error {
+			return fmt.Errorf("channle:%s addr:%s unknown packet, session:%d data:%v", name, addr, session, data)
+		},
+		session: 0,
+		reqChan: make(chan []*MsgPart, 500),
 	}
 
 	go ch.DispatchRes(ctx, closeChannle)
