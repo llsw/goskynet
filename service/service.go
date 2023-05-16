@@ -323,6 +323,26 @@ func (s *Service) Call(pidOrName interface{},
 	return nil, fmt.Errorf("call pidOrName type:%v invalid", pidOrName)
 }
 
+func (s *Service) Broadcast(name string,
+	cmd string, args ...interface{}) (err error) {
+	message := &Msg{
+		Cmd:  cmd,
+		Args: args,
+	}
+	ctx := s.system.Root
+	if ag, ok := s.actors[name]; ok {
+		for _, v := range ag.Actors {
+			_, err = s.callByPid(ctx, v, cmd, message)
+			if err != nil {
+				return
+			}
+		}
+		return
+	} else {
+		return fmt.Errorf("broadcast service:%s not found", name)
+	}
+}
+
 func (s *Service) CallNoBlock(pidOrName interface{},
 	cmd string, args ...interface{}) {
 	ll := len(args)
