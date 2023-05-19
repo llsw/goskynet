@@ -400,15 +400,13 @@ func NewChannel(name string, addr string, ctx context.Context, closeChannle func
 	var conn netpoll.Connection
 	conn, err = dialer.DialConnection(
 		"tcp", addr, time.Duration(5*time.Second))
-	if err != nil {
-		panic("dial netpoll connection failed")
-	}
 
 	if err != nil {
 		hlog.Errorf(
-			"node new channel fail, addr:%s, error:%s\n",
-			addr, err.Error(),
+			"node new channel fail, name:%s addr:%s, error:%s\n",
+			name, addr, err.Error(),
 		)
+		return
 	}
 
 	rpc, err := NewRpc()
