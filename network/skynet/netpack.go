@@ -632,12 +632,12 @@ func wbTableHash(b *block, v map[string]interface{}, depth int) (err error) {
 		return
 	}
 	b.write(byte(combineType(TYPE_TABLE, 0)))
-	for k, e := range v {
-		err = packOne(k, b, depth)
+	for key, value := range v {
+		err = packOne(key, b, depth)
 		if err != nil {
 			return
 		}
-		err = packOne(e, b, depth)
+		err = packOne(value, b, depth)
 		if err != nil {
 			return
 		}
@@ -809,7 +809,7 @@ func getTableHash(msg *[]byte, offset uint32,
 		}
 
 		if k == nil {
-			continue
+			break
 		}
 
 		offset, v, err = unpackOne(msg, offset, allsz)
