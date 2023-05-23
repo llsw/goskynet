@@ -955,7 +955,7 @@ func pushValue(msg *[]byte, offset uint32,
 			}
 			buf := make([]byte, l)
 			copy(buf, (*msg)[start:offset])
-			arg = buf
+			arg = string(buf)
 		} else {
 			if vc != 4 {
 				err = fmt.Errorf("push value invalid serialize stream vc:%d", vc)
