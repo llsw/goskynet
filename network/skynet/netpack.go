@@ -939,45 +939,27 @@ func pushValue(msg *[]byte, offset uint32,
 		copy(buf, (*msg)[start:offset])
 		arg = string(buf)
 	case TYPE_LONG_STRING:
-		if vc == 2 {
-			start := offset
-			if msg == nil || len(*msg) < int(start+2) {
-				err = fmt.Errorf("push value invalid msg:%v need:%d", msg, start+2)
-				return
-			}
-			sz := binary.LittleEndian.Uint16((*msg)[start : start+2])
-			start = start + uint32(2)
-			l := uint32(sz)
-			offset = start + l
-			if len(*msg) < int(offset) {
-				err = fmt.Errorf("push value invalid msg:%v need:%d", msg, offset)
-				return
-			}
-			buf := make([]byte, l)
-			copy(buf, (*msg)[start:offset])
-			arg = string(buf)
-		} else {
-			if vc != 4 {
-				err = fmt.Errorf("push value invalid serialize stream vc:%d", vc)
-				return
-			}
-			start := offset
-			if msg == nil || len(*msg) < int(start+4) {
-				err = fmt.Errorf("push value invalid msg:%v need:%d", msg, start+4)
-				return
-			}
-			sz := binary.LittleEndian.Uint32((*msg)[start : start+4])
-			start = start + uint32(4)
-			l := uint32(sz)
-			offset = start + l
-			if len(*msg) < int(offset) {
-				err = fmt.Errorf("unpack one invalid msg:%v need:%d", msg, offset)
-				return
-			}
-			buf := make([]byte, l)
-			copy(buf, (*msg)[start:offset])
-			arg = string(buf)
+		if vc != 2 && vc != 4 {
+			err = fmt.Errorf("push value invalid serialize stream vc:%d", vc)
+			return
 		}
+		dt := uint32(vc)
+		start := offset
+		if msg == nil || len(*msg) < int(start+dt) {
+			err = fmt.Errorf("push value invalid msg:%v need:%d", msg, start+dt)
+			return
+		}
+		sz := binary.LittleEndian.Uint16((*msg)[start : start+dt])
+		start = start + dt
+		l := uint32(sz)
+		offset = start + l
+		if len(*msg) < int(offset) {
+			err = fmt.Errorf("push value invalid msg:%v need:%d", msg, offset)
+			return
+		}
+		buf := make([]byte, l)
+		copy(buf, (*msg)[start:offset])
+		arg = string(buf)
 	case TYPE_TABLE:
 		offset, arg, err = getTable(msg, offset, vc, allsz)
 	default:
