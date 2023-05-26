@@ -909,6 +909,7 @@ func pushValue(msg *[]byte, offset uint32,
 		}
 		offset = offset + 1
 	case TYPE_NUMBER:
+		offset = offset + 1
 		if vc == TYPE_NUMBER_REAL {
 			start := offset
 			offset = offset + 8
@@ -922,9 +923,11 @@ func pushValue(msg *[]byte, offset uint32,
 			offset, arg, err = getInt(msg, offset, vc)
 		}
 	case TYPE_USERDATA:
+		offset = offset + 1
 		// go不能使用lua的指针
 		offset += 8
 	case TYPE_SHORT_STRING:
+		offset = offset + 1
 		start := offset
 		l := uint32(vc)
 		offset = start + l
@@ -936,6 +939,7 @@ func pushValue(msg *[]byte, offset uint32,
 		copy(buf, (*msg)[start:offset])
 		arg = string(buf)
 	case TYPE_LONG_STRING:
+		offset = offset + 1
 		if vc != 2 && vc != 4 {
 			err = fmt.Errorf("push value invalid 3 serialize stream vc:%d", vc)
 			return
@@ -958,6 +962,7 @@ func pushValue(msg *[]byte, offset uint32,
 		copy(buf, (*msg)[start:offset])
 		arg = string(buf)
 	case TYPE_TABLE:
+		offset = offset + 1
 		offset, arg, err = getTable(msg, offset, vc, allsz)
 	default:
 		err = fmt.Errorf("invalid serialize 6 type vt:%d", vt)
