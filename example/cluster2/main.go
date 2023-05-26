@@ -15,7 +15,7 @@ func main() {
 		// time.AfterFunc(30*time.Second, test)
 		// for {
 		utils.DelayFunc(1, func() {
-			go test()
+			go test2()
 		})
 		// }
 	}, func() {
@@ -45,6 +45,12 @@ func test1() {
 		}
 	}
 	cluster.CallNoBlock("cluster1", "ikun", "Ikun", "hello", "ikun", cb)
+}
+
+func test2() {
+	resp, err := cluster.Call("plaza1", "plaza", "commonCallback", "dfdfdsfads", "dfadsfdsaf", 100)
+	ok := resp.([]interface{})[0].([]interface{})[0].(bool)
+	hlog.Errorf("resp:%v ok:%v err:%v", resp, ok, err)
 }
 
 func test() {

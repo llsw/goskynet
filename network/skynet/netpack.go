@@ -769,16 +769,11 @@ func unpackOne(msg *[]byte, offset uint32,
 		err = fmt.Errorf("unpack one invalid msg:%v need:%d", msg, offset+1)
 		return
 	}
-	if offset >= allsz-1 {
-		roffset = offset
-		return
-	}
+	// if offset >= allsz-1 {
+	// 	roffset = offset
+	// 	return
+	// }
 	vtb := (*msg)[offset]
-	offset++
-	if offset >= allsz-1 {
-		roffset = offset
-		return
-	}
 	roffset, arg, err = pushValue(msg, offset, vtb, allsz)
 	if err != nil {
 		return
@@ -906,11 +901,13 @@ func pushValue(msg *[]byte, offset uint32,
 	vt, vc := separateType(vtb)
 	switch vt {
 	case TYPE_NIL:
+		offset = offset + 1
 	case TYPE_BOOLEAN:
 		arg = false
 		if vc == 1 {
 			arg = true
 		}
+		offset = offset + 1
 	case TYPE_NUMBER:
 		if vc == TYPE_NUMBER_REAL {
 			start := offset
@@ -978,7 +975,7 @@ func Unpack(msg *[]byte, sz uint32) (args []interface{}, err error) {
 			err = fmt.Errorf("unpack maybe infinite loop")
 			break
 		}
-		if offset >= sz-1 {
+		if offset >= sz {
 			break
 		}
 		var arg interface{}

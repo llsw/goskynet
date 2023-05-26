@@ -179,7 +179,6 @@ func (c *Channel) DispatchResOnce() (ok bool, err error) {
 	if err != nil {
 		return
 	}
-
 	respData, err := Unpack(msg, dsz)
 	if err != nil {
 		hlog.Errorf(
