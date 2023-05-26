@@ -913,7 +913,7 @@ func pushValue(msg *[]byte, offset uint32,
 			start := offset
 			offset = offset + 8
 			if msg == nil || len(*msg) < int(offset)+8 {
-				err = fmt.Errorf("push value invalid msg:%v need:%d", msg, offset+8)
+				err = fmt.Errorf("push value invalid 1 msg:%v need:%d", msg, offset+8)
 				return
 			}
 			buf := (*msg)[start:offset]
@@ -929,7 +929,7 @@ func pushValue(msg *[]byte, offset uint32,
 		l := uint32(vc)
 		offset = start + l
 		if msg == nil || len(*msg) < int(offset) {
-			err = fmt.Errorf("push value invalid msg:%v need:%d", msg, offset)
+			err = fmt.Errorf("push value invalid 2 msg:%v need:%d", msg, offset)
 			return
 		}
 		buf := make([]byte, l)
@@ -937,13 +937,13 @@ func pushValue(msg *[]byte, offset uint32,
 		arg = string(buf)
 	case TYPE_LONG_STRING:
 		if vc != 2 && vc != 4 {
-			err = fmt.Errorf("push value invalid serialize stream vc:%d", vc)
+			err = fmt.Errorf("push value invalid 3 serialize stream vc:%d", vc)
 			return
 		}
 		dt := uint32(vc)
 		start := offset
 		if msg == nil || len(*msg) < int(start+dt) {
-			err = fmt.Errorf("push value invalid msg:%v need:%d", msg, start+dt)
+			err = fmt.Errorf("push value invalid 4 msg:%v need:%d", msg, start+dt)
 			return
 		}
 		sz := binary.LittleEndian.Uint16((*msg)[start : start+dt])
@@ -951,7 +951,7 @@ func pushValue(msg *[]byte, offset uint32,
 		l := uint32(sz)
 		offset = start + l
 		if len(*msg) < int(offset) {
-			err = fmt.Errorf("push value invalid msg:%v need:%d", msg, offset)
+			err = fmt.Errorf("push value invalid 5 msg:%v need:%d", msg, offset)
 			return
 		}
 		buf := make([]byte, l)
@@ -960,7 +960,7 @@ func pushValue(msg *[]byte, offset uint32,
 	case TYPE_TABLE:
 		offset, arg, err = getTable(msg, offset, vc, allsz)
 	default:
-		err = fmt.Errorf("invalid serialize type vt:%d", vt)
+		err = fmt.Errorf("invalid serialize 6 type vt:%d", vt)
 	}
 	roffset = offset
 	return
