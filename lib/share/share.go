@@ -16,8 +16,8 @@ type (
 		Method reflect.Method
 	}
 	Res struct {
-		Data interface{}
-		Err  error
+		Data interface{} `json:"data,omitempty"`
+		Err  error       `json:"err,omitempty"`
 	}
 
 	ResChan chan *Res
