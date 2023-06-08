@@ -3,6 +3,7 @@ package skynet
 import (
 	"bytes"
 	"encoding/binary"
+	"encoding/json"
 	"fmt"
 	"math"
 	"reflect"
@@ -675,8 +676,15 @@ func packOne(v interface{}, b *block, depth int) (err error) {
 	case map[string]interface{}:
 		err = wbTableHash(b, v, depth+1)
 	default:
-		// 如果是其他类型，抛出异常
-		err = fmt.Errorf("invalid type: %v", reflect.TypeOf(v))
+		hlog.Errorf("invalid type: %v will json marshal", reflect.TypeOf(v))
+		var bs []byte
+		bs, err = json.Marshal(v)
+		if err != nil {
+			// 如果是其他类型，抛出异常
+			err = fmt.Errorf("invalid type: %v can not json marshal", reflect.TypeOf(v))
+		} else {
+			wbString(b, string(bs))
+		}
 	}
 	return err
 }
