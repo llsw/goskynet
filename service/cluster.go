@@ -92,6 +92,10 @@ func (c *Cluster) Call(cluster string, addr string, req ...interface{}) (resp in
 	return c.worker.Call(node, addr, req...)
 }
 
+func (c *Cluster) CallByAddr(cluster string, addr string, req ...interface{}) (resp interface{}, err error) {
+	return c.worker.Call(cluster, addr, req...)
+}
+
 func (c *Cluster) CallNoBlock(cluster string, addr string, req ...interface{}) {
 	node, err := utils.GetClusterAddrByName(cluster)
 	if err != nil {
@@ -101,6 +105,11 @@ func (c *Cluster) CallNoBlock(cluster string, addr string, req ...interface{}) {
 	}
 	// hlog.Debugf("CallNoBlock %v", req)
 	c.worker.CallNoBlock(node, addr, req...)
+}
+
+func (c *Cluster) CallByAddrNoBlock(cluster string, addr string, req ...interface{}) {
+	// hlog.Debugf("CallNoBlock %v", req)
+	c.worker.CallNoBlock(cluster, addr, req...)
 }
 
 func (c *Cluster) Send(cluster string, addr string, req ...interface{}) (err error) {
@@ -115,12 +124,24 @@ func Call(req ...interface{}) (resp interface{}, err error) {
 	return GetInstance().Call(cv.SERVICE.CLUSTER, "Call", req...)
 }
 
+func CallByAddr(req ...interface{}) (resp interface{}, err error) {
+	return GetInstance().Call(cv.SERVICE.CLUSTER, "CallByAddr", req...)
+}
+
 func CallNoBlock(req ...interface{}) {
 	GetInstance().CallNoBlock(cv.SERVICE.CLUSTER, "CallNoBlock", req...)
 }
 
+func CallByAddrNoBlock(req ...interface{}) {
+	GetInstance().CallNoBlock(cv.SERVICE.CLUSTER, "CallByAddrNoBlock", req...)
+}
+
 func Send(req ...interface{}) (err error) {
 	return GetInstance().Send(cv.SERVICE.CLUSTER, "Call", req...)
+}
+
+func SendByAddr(req ...interface{}) (err error) {
+	return GetInstance().Send(cv.SERVICE.CLUSTER, "CallByAddr", req...)
 }
 
 // ===自定义消息处理方法===
