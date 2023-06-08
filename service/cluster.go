@@ -41,7 +41,7 @@ func (c *Cluster) Stop(name string, pid *actor.PID) (err error) {
 	return
 }
 
-func (c *Cluster) onData(addr interface{}, session uint32, args ...interface{}) {
+func (c *Cluster) onData(conn *skynetCore.GateConn, addr interface{}, session uint32, args ...interface{}) {
 	// hlog.Debugf("onData addr:%v session:%d, args:%v", addr, session, args)
 	index := len(args) - 1
 	f := args[index].(func([]interface{}, error))

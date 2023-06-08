@@ -11,7 +11,7 @@ import (
 	share "github.com/llsw/goskynet/lib/share"
 )
 
-type ClusterMsgHandler func(addr interface{}, session uint32, args ...interface{})
+type ClusterMsgHandler func(conn *GateConn, addr interface{}, session uint32, args ...interface{})
 
 type ReqLargePkg struct {
 	Addr interface{}
@@ -34,7 +34,7 @@ type Cluster struct {
 	clock    sync.Mutex
 }
 
-func defalutHandler(addr interface{}, session uint32, args ...interface{}) {
+func defalutHandler(conn *GateConn, addr interface{}, session uint32, args ...interface{}) {
 	// 创建一个lua数据，包含nil，bool，int64，float64，string，切片和映射
 	// L := map[interface{}]interface{}{
 	// 	"nil":    nil,
@@ -105,7 +105,7 @@ func (c *Cluster) msg(cc *GateConn, ctx context.Context, conn network.Conn,
 		args, err = Unpack(msg, sz)
 		if err == nil {
 			args = append(args, cb)
-			c.handler(addr, session, args...)
+			c.handler(cc, addr, session, args...)
 			return
 		}
 	}
