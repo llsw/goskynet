@@ -226,7 +226,7 @@ func (c *Cluster) getChannel(addr string) (channel *Channel, err error) {
 			return
 		} else {
 			ctx := context.Background()
-			c.channels[addr], err = NewChannel(c.name, addr, ctx, func() {
+			channel, err = NewChannel(c.name, addr, ctx, func() {
 				if _, ok := c.channels[addr]; !ok {
 					return
 				}
@@ -249,7 +249,7 @@ func (c *Cluster) getChannel(addr string) (channel *Channel, err error) {
 				)
 				return
 			}
-			channel = c.channels[addr]
+			c.channels[addr] = channel
 		}
 	}
 	return
