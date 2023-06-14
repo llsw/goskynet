@@ -232,3 +232,13 @@ func StartCluster(version string, start func(), test func()) {
 	}()
 	hlog.Fatal(c.ListenAndServe())
 }
+
+func StartClusterWithConfig(configPath string, start func(), test func()) {
+	c, close := startCluster(configPath)
+	defer close()
+	go func() {
+		start()
+		test()
+	}()
+	hlog.Fatal(c.ListenAndServe())
+}
