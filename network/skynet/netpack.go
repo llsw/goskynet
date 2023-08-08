@@ -658,7 +658,15 @@ func packOne(v interface{}, b *block, depth int) (err error) {
 		} else {
 			b.write(byte(combineType(TYPE_BOOLEAN, 0)))
 		}
+	case uint16:
+		wbIntegerInt(b, int64(v))
+	case int16:
+		wbIntegerInt(b, int64(v))
 	case int:
+		wbIntegerInt(b, int64(v))
+	case int32:
+		wbIntegerInt(b, int64(v))
+	case uint32:
 		wbIntegerInt(b, int64(v))
 	case int64:
 		wbIntegerInt(b, v)
