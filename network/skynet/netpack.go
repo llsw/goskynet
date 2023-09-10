@@ -753,9 +753,9 @@ func getInt(msg *[]byte, offset uint32,
 		}
 		arg = binary.LittleEndian.Uint16((*msg)[offset:roffset])
 		if arg.(uint16) >= 0x8000 {
-			arg = arg.(int16)
+			arg = int(arg.(int16))
 		} else {
-			arg = arg.(uint16)
+			arg = int(arg.(uint16))
 		}
 	case TYPE_NUMBER_DWORD:
 		roffset = offset + 4
@@ -764,7 +764,7 @@ func getInt(msg *[]byte, offset uint32,
 			return
 		}
 		arg = binary.LittleEndian.Uint32((*msg)[offset:roffset])
-		arg = int32(arg.(uint32))
+		arg = int(int32(arg.(uint32)))
 	case TYPE_NUMBER_QWORD:
 		roffset = offset + 8
 		if msg == nil || len(*msg) < int(roffset) {
@@ -772,7 +772,7 @@ func getInt(msg *[]byte, offset uint32,
 			return
 		}
 		arg = binary.LittleEndian.Uint64((*msg)[offset:roffset])
-		arg = arg.(int64)
+		arg = int(arg.(int64))
 	default:
 		err = fmt.Errorf("invalid serialize integer type:%d", vc)
 	}
