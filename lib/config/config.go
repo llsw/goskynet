@@ -307,7 +307,6 @@ func syncConfig(configReader *ConfigReader) {
 		_, err := configReader.getConfig()
 		if err != nil {
 			hlog.Errorf("failed to read config: %v\n", err)
-			continue
 		}
 		time.Sleep(time.Second * 60)
 	}
@@ -318,7 +317,6 @@ func syncConfigStruct(configReader *ConfigReaderStruct) {
 		_, err := configReader.getConfigStruct()
 		if err != nil {
 			hlog.Errorf("failed to read config: %v\n", err)
-			continue
 		}
 		time.Sleep(time.Second * 60)
 	}
