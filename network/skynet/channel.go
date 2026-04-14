@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -224,7 +225,7 @@ func (c *Channel) DispatchRes(ctx context.Context, closeChannle func()) {
 		_, err := c.DispatchResOnce()
 		if err != nil {
 			hlog.Debugf("dispatch error:%s", err.Error())
-			if errors.Is(err, io.EOF) || err.Error() == io.EOF.Error() {
+			if errors.Is(err, io.EOF) || err.Error() == io.EOF.Error() || strings.HasPrefix(err.Error(), "EOF") {
 				return
 			}
 		}
