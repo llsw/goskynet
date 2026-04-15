@@ -26,6 +26,22 @@ type Resp struct {
 	Data    interface{}
 }
 
+// 判断是否是结束/关闭类错误
+func isNetpollEOFOrClosed(err error) bool {
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, netpoll.ErrEOF) ||
+		errors.Is(err, netpoll.ErrConnClosed)
+}
+
+// 如果还要判断超时
+func isReadWriteDone(err error) bool {
+	return errors.Is(err, io.EOF) ||
+		errors.Is(err, netpoll.ErrEOF) ||
+		errors.Is(err, netpoll.ErrConnClosed) ||
+		errors.Is(err, netpoll.ErrReadTimeout) ||
+		errors.Is(err, netpoll.ErrWriteTimeout)
+}
+
 type OnUnknownPacket func(session uint32, data interface{}) error
 
 func defaultOnUnknownPacket(session uint32, data interface{}) error {
@@ -225,7 +241,7 @@ func (c *Channel) DispatchRes(ctx context.Context, closeChannle func()) {
 		_, err := c.DispatchResOnce()
 		if err != nil {
 			hlog.Debugf("dispatch error:%s", err.Error())
-			if errors.Is(err, io.EOF) || errors.Is(err, netpoll.ErrEOF) || err.Error() == io.EOF.Error() || strings.HasPrefix(err.Error(), "EOF") {
+			if isReadWriteDone(err) || err.Error() == io.EOF.Error() || strings.HasPrefix(err.Error(), "EOF") {
 				return
 			}
 		}
