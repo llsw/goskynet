@@ -225,7 +225,7 @@ func (c *Channel) DispatchRes(ctx context.Context, closeChannle func()) {
 		_, err := c.DispatchResOnce()
 		if err != nil {
 			hlog.Debugf("dispatch error:%s", err.Error())
-			if errors.Is(err, io.EOF) || err.Error() == io.EOF.Error() || strings.HasPrefix(err.Error(), "EOF") {
+			if errors.Is(err, io.EOF) || errors.Is(err, netpoll.ErrEOF) || err.Error() == io.EOF.Error() || strings.HasPrefix(err.Error(), "EOF") {
 				return
 			}
 		}
