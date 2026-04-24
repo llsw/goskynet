@@ -169,6 +169,10 @@ func (c *Channel) DispatchResOnce() (ok bool, err error) {
 
 	rpc := c.rpc
 	session, ok, data, padding, err := rpc.Dispatch(reader, sz)
+	if !ok {
+		err = fmt.Errorf("rpc.Dispatch error session:%d, error:%v, size:%d\n", session, string(*data.Msg), data.Sz)
+		return
+	}
 	if err != nil {
 		if session != 0 {
 			delete(c.largePkg, session)
@@ -196,10 +200,11 @@ func (c *Channel) DispatchResOnce() (ok bool, err error) {
 	if err != nil {
 		return
 	}
+	// 错误的时候吧 msg dsz打印出来
 	respData, err := Unpack(msg, dsz)
 	if err != nil {
 		hlog.Errorf(
-			"DispatchOnce error session:%d %v\n", session, err.Error())
+			"DispatchOnce error session:%d %v, msg:%v, dsz:%d\n", session, err.Error(), msg, dsz)
 		return
 	}
 
