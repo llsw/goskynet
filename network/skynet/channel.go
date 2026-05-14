@@ -91,7 +91,7 @@ type Channel struct {
 }
 
 func (c *Channel) NextSession() uint32 {
-	return atomic.AddUint32(&(c.session), 1)
+	return atomic.AddUint32(&(c.session), 2)
 }
 
 func (c *Channel) setSession(session uint32, call *Call) {
@@ -447,7 +447,7 @@ func NewChannel(name string, addr string, ctx context.Context, closeChannle func
 		onUnknown: func(session uint32, data interface{}) error {
 			return fmt.Errorf("channle:%s addr:%s unknown packet, session:%d data:%v", name, addr, session, data)
 		},
-		session: 0,
+		session: 1,
 		reqChan: make(chan []*MsgPart, 500),
 	}
 
