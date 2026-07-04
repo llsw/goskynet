@@ -753,7 +753,7 @@ func getInt(msg *[]byte, offset uint32,
 		}
 		arg = binary.LittleEndian.Uint16((*msg)[offset:roffset])
 		if arg.(uint16) >= 0x8000 {
-			arg = int(arg.(int16))
+			arg = int(arg.(uint16))
 		} else {
 			arg = int(arg.(uint16))
 		}
